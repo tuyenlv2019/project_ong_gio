@@ -12,8 +12,15 @@ public static class DependencyInjection
         services.AddSingleton<IAreaFormula, Co90AreaFormula>();
         services.AddSingleton<IAreaFormula, Co45AreaFormula>();
         services.AddSingleton<IAreaFormula, OngThangAreaFormula>();
+        services.AddSingleton<IAreaFormula, OngBitMotDauAreaFormula>();
+        services.AddSingleton<IAreaFormula, OngBitHaiDauAreaFormula>();
         services.AddSingleton<IAreaFormula, GiamAreaFormula>();
         services.AddSingleton<IAreaFormula, ChanReAreaFormula>();
+        services.AddSingleton<IAreaFormula, BzAreaFormula>();
+        services.AddSingleton<IAreaFormula, TeCutAreaFormula>();
+        services.AddSingleton<IAreaFormula, TeReAreaFormula>();
+        services.AddSingleton<IAreaFormula, HopPlenumAreaFormula>();
+        services.AddSingleton<IAreaFormula, ChacAreaFormula>();
         services.AddScoped<ICalculationEngine, CalculationEngine>();
         return services;
     }

@@ -36,9 +36,14 @@ export interface BaoGia {
 
 export interface ChiTietBaoGia {
   id: number;
+  tenSanPham?: string;
+  donViTinh?: string;
+  ghiChu?: string;
   wInput: number;
   hInput: number;
+  thamSoNhapJson?: string;
   soLuong: number;
+  thueSuat: number;
   giaNhanCong: number;
   phuKien: number;
   dienTichSx1Cai: number;
@@ -72,6 +77,9 @@ export interface DashboardStats {
 }
 
 export interface CalculationRequest {
+  tenSanPham?: string;
+  donViTinh?: string;
+  thueSuat?: number;
   nhomSanPhamId: number;
   loaiTonId: number;
   w: number;
@@ -79,10 +87,12 @@ export interface CalculationRequest {
   soLuong: number;
   giaNhanCong: number;
   phuKien: number;
+  thamSoNhap?: Record<string, number>;
 }
 
 export interface CalculationResult {
   dienTichSx1Cai: number;
+  dienTichSanXuatMetToi: number;
   tongDienTichLo: number;
   trongLuongKg: number;
   thanhTienTon: number;
@@ -93,6 +103,9 @@ export interface CalculationResult {
 }
 
 export interface LineFormValues {
+  tenSanPham?: string;
+  donViTinh?: string;
+  thueSuat?: number;
   nhomSanPhamId: number;
   loaiTonId: number;
   w: number;
@@ -100,4 +113,6 @@ export interface LineFormValues {
   soLuong: number;
   giaNhanCong: number;
   phuKien: number;
+  thamSoNhap?: Record<string, number>;
+  ghiChu?: string;
 }

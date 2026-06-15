@@ -8,7 +8,17 @@ public class CalculationEngineTests
 {
     private readonly CalculationEngine _engine = new([
         new Co90AreaFormula(),
-        new OngThangAreaFormula()
+        new Co45AreaFormula(),
+        new OngThangAreaFormula(),
+        new OngBitMotDauAreaFormula(),
+        new OngBitHaiDauAreaFormula(),
+        new GiamAreaFormula(),
+        new ChanReAreaFormula(),
+        new BzAreaFormula(),
+        new TeCutAreaFormula(),
+        new TeReAreaFormula(),
+        new HopPlenumAreaFormula(),
+        new ChacAreaFormula()
     ]);
 
     private static NhomSanPham Co90Nhom() => new() { Id = 1, TenNhom = "Co 90 độ" };
@@ -41,6 +51,7 @@ public class CalculationEngineTests
 
         Assert.True(result.ApDungGiaSan);
         Assert.Equal(150_000m, result.ThanhTienTon);
+        Assert.Equal(result.DienTichSx1Cai / 1.2m, result.DienTichSanXuatMetToi);
     }
 
     [Fact]
@@ -65,5 +76,55 @@ public class CalculationEngineTests
         Assert.Equal(
             (result.ThanhTienTon + (request.GiaNhanCong + request.PhuKien) * request.SoLuong) / request.SoLuong,
             result.DonGiaCuoi);
+    }
+
+    [Theory]
+    [InlineData("CO 90 ĐỘ")]
+    [InlineData("CO 45 ĐỘ")]
+    [InlineData("GIẢM")]
+    [InlineData("ỐNG GIÓ THẲNG")]
+    [InlineData("ỐNG GIÓ BỊT 01 ĐẦU")]
+    [InlineData("ỐNG GIÓ BỊT 02 ĐẦU")]
+    [InlineData("BZ ỐNG LỆCH TÂM")]
+    [InlineData("TÊ CỤT")]
+    [InlineData("TÊ RẼ")]
+    [InlineData("HỘP CHỤP MIỆNG GIÓ THẲNG")]
+    [InlineData("CHÂN RẼ")]
+    [InlineData("CHẠC")]
+    public async Task ResolveDungCongThucTheoTenNhomSanPham(string tenNhom)
+    {
+        var request = new CalculationRequest(1, 1, 400, 300, 1, 0m, 0m);
+        var thamSo = ThamSoCo90();
+        thamSo.AddRange([
+            new() { TenThamSo = "Wmax", GiaTriSo = 500 },
+            new() { TenThamSo = "w1", GiaTriSo = 250 },
+            new() { TenThamSo = "W3", GiaTriSo = 300 },
+            new() { TenThamSo = "DO_LECH", GiaTriSo = 300 },
+            new() { TenThamSo = "SO_LO", GiaTriSo = 2 },
+            new() { TenThamSo = "D", GiaTriSo = 200 },
+            new() { TenThamSo = "curon_L", GiaTriSo = 120 }
+        ]);
+
+        var result = await _engine.CalculateAsync(
+            new NhomSanPham { Id = 1, TenNhom = tenNhom },
+            LoaiTonMau(),
+            thamSo,
+            request);
+
+        Assert.True(result.DienTichSx1Cai > 0m);
+        Assert.Equal("XAC_NHAN", result.TrangThaiCongThuc);
+    }
+
+    [Fact]
+    public async Task BaoLoiKhiNhomSanPhamChuaCoCongThuc()
+    {
+        var request = new CalculationRequest(1, 1, 400, 300, 1, 0m, 0m);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _engine.CalculateAsync(
+                new NhomSanPham { Id = 1, TenNhom = "Nhóm chưa hỗ trợ" },
+                LoaiTonMau(),
+                ThamSoCo90(),
+                request));
     }
 }

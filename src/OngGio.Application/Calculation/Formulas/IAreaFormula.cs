@@ -16,7 +16,12 @@ public record AreaFormulaInput(
     decimal L,
     decimal Mi8,
     decimal Tdc,
-    decimal MiZ);
+    decimal MiZ,
+    IReadOnlyDictionary<string, decimal> Parameters)
+{
+    public decimal Get(string key, decimal defaultValue = 0m) =>
+        Parameters.TryGetValue(key, out var value) ? value : defaultValue;
+}
 
 public record AreaFormulaResult(
     decimal SMatCongSx,

@@ -7,10 +7,12 @@ public record CalculationRequest(
     decimal H,
     int SoLuong,
     decimal GiaNhanCong,
-    decimal PhuKien);
+    decimal PhuKien,
+    IReadOnlyDictionary<string, decimal>? ThamSoNhap = null);
 
 public record CalculationResult(
     decimal DienTichSx1Cai,
+    decimal DienTichSanXuatMetToi,
     decimal TongDienTichLo,
     decimal TrongLuongKg,
     decimal ThanhTienTon,

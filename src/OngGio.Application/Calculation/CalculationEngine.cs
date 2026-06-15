@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using OngGio.Application.Calculation.Formulas;
 using OngGio.Domain.Entities;
@@ -32,27 +34,46 @@ public class CalculationEngine : ICalculationEngine
     {
         var formulaKey = ResolveFormulaKey(nhomSanPham.TenNhom);
         if (!_formulas.TryGetValue(formulaKey, out var formula))
-        {
-            throw new InvalidOperationException($"Chưa có công thức cho nhóm sản phẩm: {nhomSanPham.TenNhom}");
-        }
+            throw new InvalidOperationException($"Chua co cong thuc cho nhom san pham: {nhomSanPham.TenNhom}");
 
         var thamSo = thamSoList.ToDictionary(
             t => t.TenThamSo,
-            t => t.GiaTriSo);
+            t => t.GiaTriSo,
+            StringComparer.Ordinal);
 
-        decimal Get(string key, decimal defaultValue = 0m) =>
-            thamSo.TryGetValue(key, out var value) ? value : defaultValue;
+        if (request.ThamSoNhap is not null)
+        {
+            foreach (var item in request.ThamSoNhap)
+                thamSo[item.Key] = item.Value;
+        }
+
+        decimal Get(decimal defaultValue = 0m, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (thamSo.TryGetValue(key, out var value))
+                    return value;
+
+                var match = thamSo.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(match.Key))
+                    return match.Value;
+            }
+
+            return defaultValue;
+        }
 
         var areaResult = formula.Calculate(new AreaFormulaInput(
             request.W,
             request.H,
-            Get("R"),
-            Get("r"),
-            Get("L"),
-            Get("mi_8", 8m),
-            Get("TDC", 50m),
-            Get("mi_Z", 30m)));
+            Get(0m, "R"),
+            Get(0m, "r", "r(max)", "r_max"),
+            Get(0m, "L"),
+            Get(8m, "mi_8", "mi 8"),
+            Get(50m, "TDC"),
+            Get(30m, "mi_Z", "mi Z"),
+            thamSo));
 
+        var dienTichSanXuatMetToi = areaResult.SSx1Cai / 1.2m;
         var tongDienTichLo = areaResult.SSx1Cai * request.SoLuong;
         var apDungGiaSan = tongDienTichLo < 1.0m;
         var thanhTienTon = apDungGiaSan
@@ -70,6 +91,7 @@ public class CalculationEngine : ICalculationEngine
 
         var result = new CalculationResult(
             areaResult.SSx1Cai,
+            dienTichSanXuatMetToi,
             tongDienTichLo,
             trongLuongKg,
             thanhTienTon,
@@ -83,18 +105,48 @@ public class CalculationEngine : ICalculationEngine
 
     private static string ResolveFormulaKey(string tenNhom)
     {
-        var normalized = tenNhom.ToUpperInvariant();
+        var normalized = NormalizeKey(tenNhom);
         if (normalized.Contains("CO 90") || normalized.Contains("CO90"))
             return "CO_90";
         if (normalized.Contains("CO 45") || normalized.Contains("CO45"))
             return "CO_45";
-        if (normalized.Contains("GIẢM") || normalized.Contains("GIAM"))
+        if (normalized.Contains("GIAM") || normalized.Contains("CON THU"))
             return "GIAM";
-        if (normalized.Contains("CHÂN RẼ") || normalized.Contains("CHAN RE") || normalized.Contains("CHAN_RE"))
+        if (normalized.Contains("CHAN RE") || normalized.Contains("GIAY KHOI HANH") || normalized.Contains("COLLAR"))
             return "CHAN_RE";
-        if (normalized.Contains("ỐNG THẲNG") || normalized.Contains("ONG THANG"))
+        if (normalized.Contains("BIT 01") || normalized.Contains("BIT 1") || normalized.Contains("BIT MOT"))
+            return "ONG_BIT_1_DAU";
+        if (normalized.Contains("BIT 02") || normalized.Contains("BIT 2") || normalized.Contains("BIT HAI"))
+            return "ONG_BIT_2_DAU";
+        if (normalized.Contains("BZ") || normalized.Contains("LECH TAM") || normalized.Contains("CO NGONG"))
+            return "BZ";
+        if (normalized.Contains("TE CUT"))
+            return "TE_CUT";
+        if (normalized.Contains("TE RE"))
+            return "TE_RE";
+        if (normalized.Contains("HOP") || normalized.Contains("PLENUM") || normalized.Contains("ZIGZAC"))
+            return "HOP_PLENUM";
+        if (normalized.Contains("CHAC"))
+            return "CHAC";
+        if (normalized.Contains("ONG THANG") || normalized.Contains("ONG GIO THANG") || normalized.Contains("ONG"))
             return "ONG_THANG";
-        return "CO_90";
+
+        throw new InvalidOperationException($"Chua co cong thuc cho nhom san pham: {tenNhom}");
+    }
+
+    private static string NormalizeKey(string value)
+    {
+        var decomposed = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(decomposed.Length);
+
+        foreach (var c in decomposed)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category != UnicodeCategory.NonSpacingMark)
+                builder.Append(c == 'd' || c == 'D' || c == 'đ' || c == 'Đ' ? 'D' : char.ToUpperInvariant(c));
+        }
+
+        return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
     private static decimal ResolveBarem(LoaiTon loaiTon)

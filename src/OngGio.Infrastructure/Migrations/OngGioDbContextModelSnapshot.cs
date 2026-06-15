@@ -17,7 +17,7 @@ namespace OngGio.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "8.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -105,6 +105,13 @@ namespace OngGio.Infrastructure.Migrations
                     b.Property<decimal>("DienTichSx1Cai")
                         .HasColumnType("numeric");
 
+                    b.Property<string>("DonViTinh")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("cai");
+
                     b.Property<decimal>("DonGiaCuoi")
                         .HasColumnType("numeric");
 
@@ -125,6 +132,17 @@ namespace OngGio.Infrastructure.Migrations
 
                     b.Property<int>("SoLuong")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TenSanPham")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ThamSoNhapJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tham_so_nhap");
+
+                    b.Property<decimal>("ThueSuat")
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("ThanhTien")
                         .HasColumnType("numeric");

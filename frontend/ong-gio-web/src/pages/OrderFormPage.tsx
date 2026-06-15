@@ -1,14 +1,8 @@
-// // ĐÃ BÌNH LUẬN (vi) - frontend/ong-gio-web/src/pages/OrderFormPage.tsx - Bình luận tự động tiếng Việt
-// Đây là file frontend/ong-gio-web/src/pages/OrderFormPage.tsx
-// Trang tạo/sửa đơn hàng: hiển thị form, quản lý dòng sản phẩm, gọi preview tính toán và lưu
+
 import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
-// Import thư viện hoặc module cần thiết
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
-// Import thư viện hoặc module cần thiết
 import { useEffect, useState } from 'react';
-// Import thư viện hoặc module cần thiết
 import { useNavigate, useParams } from 'react-router-dom';
-// Import thư viện hoặc module cần thiết
 import {
   createBaoGia,
   formatMoney,
@@ -25,8 +19,118 @@ const { Title, Text } = Typography;
 
 // Định dạng diện tích hiển thị với 4 chữ số thập phân
 function formatArea(value: number) {
-  return value.toFixed(4);
+  return value.toFixed(6);
 }
+
+type DimensionField = {
+  key: string;
+  label: string;
+  target: 'w' | 'h' | 'thamSoNhap';
+  paramKey?: string;
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toUpperCase();
+}
+
+function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
+  const name = normalizeText(nhom?.tenNhom ?? '');
+
+  if (name.includes('CO 90') || name.includes('CO90') || name.includes('CO 45') || name.includes('CO45')) {
+    return [
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
+      { key: 'R', label: 'R', target: 'thamSoNhap', paramKey: 'R' },
+    ];
+  }
+
+  if (name.includes('GIAM') || name.includes('CON THU')) {
+    return [
+      { key: 'w', label: 'Wmax', target: 'w' },
+      { key: 'h', label: 'Hmax', target: 'h' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+    ];
+  }
+
+  if (name.includes('BIT 01') || name.includes('BIT 1') || name.includes('BIT 02') || name.includes('BIT 2') || name.includes('ONG THANG') || name.includes('ONG GIO THANG')) {
+    return [
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+      { key: 'phan_manh', label: 'Mảnh', target: 'thamSoNhap', paramKey: 'phan_manh' },
+    ];
+  }
+
+  if (name.includes('BZ') || name.includes('LECH TAM') || name.includes('CO NGONG')) {
+    return [
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+      { key: 'DO_LECH', label: 'Độ lệch', target: 'thamSoNhap', paramKey: 'DO_LECH' },
+    ];
+  }
+
+  if (name.includes('TE CUT')) {
+    return [
+      { key: 'Wmax', label: 'Wmax', target: 'thamSoNhap', paramKey: 'Wmax' },
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
+    ];
+  }
+
+  if (name.includes('TE RE')) {
+    return [
+      { key: 'Wp', label: "W'", target: 'thamSoNhap', paramKey: 'Wp' },
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
+    ];
+  }
+
+  if (name.includes('HOP') || name.includes('PLENUM') || name.includes('ZIGZAC')) {
+    return [
+      { key: 'SO_LO', label: 'Số lỗ', target: 'thamSoNhap', paramKey: 'SO_LO' },
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+      { key: 'D', label: 'Ø', target: 'thamSoNhap', paramKey: 'D' },
+    ];
+  }
+
+  if (name.includes('CHAN RE') || name.includes('GIAY KHOI HANH') || name.includes('COLLAR')) {
+    return [
+      { key: 'w', label: 'W', target: 'w' },
+      { key: 'h', label: 'H', target: 'h' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+    ];
+  }
+
+  if (name.includes('CHAC')) {
+    return [
+      { key: 'Wmax', label: 'Wmax', target: 'thamSoNhap', paramKey: 'Wmax' },
+      { key: 'R', label: 'R', target: 'thamSoNhap', paramKey: 'R' },
+      { key: 'w1', label: 'w1', target: 'thamSoNhap', paramKey: 'w1' },
+      { key: 'W3', label: 'W3', target: 'thamSoNhap', paramKey: 'W3' },
+      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+      { key: 'h', label: 'H', target: 'h' },
+    ];
+  }
+
+  return [
+    { key: 'w', label: 'W', target: 'w' },
+    { key: 'h', label: 'H', target: 'h' },
+    { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
+  ];
+}
+
+const defaultLineValues = { donViTinh: 'cái', thueSuat: 8 };
 
 // Component chính của trang form đơn hàng
 export default function OrderFormPage() {
@@ -50,16 +154,19 @@ export default function OrderFormPage() {
 
       if (isEdit && id) {
         const bg = await getBaoGia(Number(id));
-        form.setFieldsValue({ tenKhachHang: bg.tenKhachHang, thueSuat: bg.thueSuat });
+        form.setFieldsValue({ tenKhachHang: bg.tenKhachHang });
         const initialLines = (bg.chiTietBaoGias ?? []).map((c) => ({
+          tenSanPham: c.tenSanPham,
+          donViTinh: c.donViTinh ?? 'cái',
+          thueSuat: (c.thueSuat ?? bg.thueSuat ?? 0.08) * 100,
           nhomSanPhamId: c.nhomSanPham?.id ?? 0,
           loaiTonId: c.loaiTon?.id ?? 0,
           w: c.wInput,
           h: c.hInput,
+          thamSoNhap: c.thamSoNhapJson ? JSON.parse(c.thamSoNhapJson) : undefined,
           soLuong: c.soLuong,
           giaNhanCong: c.giaNhanCong ?? 0,
           phuKien: c.phuKien ?? 0,
-          maHang: c.maHang,
           ghiChu: c.ghiChu,
         }));
         form.setFieldsValue({ lineInputs: initialLines.length > 0 ? initialLines : [{}] });
@@ -68,8 +175,9 @@ export default function OrderFormPage() {
         }
       } else if (nhoms[0] && tons[0]) {
         form.setFieldsValue({
-          thueSuat: 0.08,
           lineInputs: [{
+            donViTinh: 'cái',
+            thueSuat: 8,
             nhomSanPhamId: nhoms[0].id,
             loaiTonId: tons[0].id,
             w: 400,
@@ -100,13 +208,13 @@ export default function OrderFormPage() {
   const ensureNewRowIfNeeded = (allValues: any) => {
     const items = allValues.lineInputs || [];
     if (items.length === 0) {
-      form.setFieldsValue({ lineInputs: [{}] });
+      form.setFieldsValue({ lineInputs: [{ ...defaultLineValues }] });
       return;
     }
     const last = items[items.length - 1];
-    const filled = last && last.nhomSanPhamId && last.loaiTonId && last.w > 0 && last.h > 0 && last.soLuong > 0;
+    const filled = last && last.tenSanPham && last.nhomSanPhamId && last.loaiTonId && last.w > 0 && last.h > 0 && last.soLuong > 0;
     if (filled) {
-      form.setFieldsValue({ lineInputs: [...items, {}] });
+      form.setFieldsValue({ lineInputs: [...items, { ...defaultLineValues }] });
     }
   };
 
@@ -131,23 +239,24 @@ export default function OrderFormPage() {
   const calculateTotals = () => {
     let totalThanhTien = 0;
     const items = form.getFieldValue('lineInputs') || [];
-    const thueSuat = form.getFieldValue('thueSuat') || 0;
+    let totalThue = 0;
 
-    items.forEach((_: any, index: number) => {
+    items.forEach((item: LineFormValues, index: number) => {
       if (linePreviews[index]) {
         totalThanhTien += linePreviews[index].thanhTien;
+        totalThue += linePreviews[index].thanhTien * ((item?.thueSuat ?? 0) / 100);
       }
     });
 
     return {
       tongTien: totalThanhTien,
-      thueTien: totalThanhTien * thueSuat,
-      tongTienSauThue: totalThanhTien + totalThanhTien * thueSuat,
+      thueTien: totalThue,
+      tongTienSauThue: totalThanhTien + totalThue,
     };
   };
 
   const isRowIncomplete = (item: any) => {
-    return !item || !item.nhomSanPhamId || !item.loaiTonId || !item.w || item.w <= 0 || !item.h || item.h <= 0 || !item.soLuong || item.soLuong <= 0;
+    return !item || !item.tenSanPham || !item.nhomSanPhamId || !item.loaiTonId || !item.w || item.w <= 0 || !item.h || item.h <= 0 || !item.soLuong || item.soLuong <= 0;
   };
 
   const requiredRulesFor = (title: string) => {
@@ -175,27 +284,38 @@ export default function OrderFormPage() {
 
   // Xác thực và gửi payload tạo hoặc cập nhật báo giá lên server
   const save = async () => {
-    const header = await form.validateFields(['tenKhachHang', 'thueSuat']);
+    const header = await form.validateFields(['tenKhachHang']);
     const allLineInputs: LineFormValues[] = form.getFieldValue('lineInputs') || [];
     const filtered = allLineInputs.filter((l) => l && l.nhomSanPhamId && l.loaiTonId && l.w > 0 && l.h > 0 && l.soLuong > 0);
     if (filtered.length === 0) {
       message.warning('Thêm ít nhất một cụm sản phẩm');
       return;
     }
+    if (filtered.some((l) => !l.tenSanPham?.trim())) {
+      message.warning('Nhập tên sản phẩm cho từng dòng');
+      return;
+    }
+    if (filtered.some((l) => !l.donViTinh?.trim() || l.thueSuat === undefined || l.thueSuat === null)) {
+      message.warning('Nhập đơn vị tính và thuế suất cho từng dòng');
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
         tenKhachHang: header.tenKhachHang,
-        thueSuat: header.thueSuat,
+        thueSuat: (filtered[0]?.thueSuat ?? 0) / 100,
         lines: filtered.map((l) => ({
+          tenSanPham: l.tenSanPham,
+          donViTinh: l.donViTinh,
+          thueSuat: (l.thueSuat ?? 0) / 100,
           nhomSanPhamId: l.nhomSanPhamId,
           loaiTonId: l.loaiTonId,
           w: l.w,
           h: l.h,
+          thamSoNhap: l.thamSoNhap,
           soLuong: l.soLuong,
           giaNhanCong: l.giaNhanCong,
           phuKien: l.phuKien,
-          maHang: l.maHang,
           ghiChu: l.ghiChu,
         })),
       };
@@ -225,11 +345,6 @@ export default function OrderFormPage() {
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={6}>
-              <Form.Item name="thueSuat" label="Thuế VAT">
-                <InputNumber min={0} max={1} step={0.01} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
           </Row>
         </Card>
 
@@ -244,14 +359,56 @@ export default function OrderFormPage() {
                   render: (_: any, __: any, idx: number) => idx + 1,
                 },
                 {
-                  title: 'Tên sản phẩm',
-                  dataIndex: 'nhomSanPhamId',
-                  width: 220,
+                  title: 'Sản phẩm',
+                  dataIndex: 'sanPham',
+                  width: 260,
                   render: (_: any, field: any) => (
-                      <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Tên sản phẩm') ?? [{ required: true, message: 'Chọn nhóm SP' }] }>
-                      <Select placeholder="Chọn nhóm" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
-                    </Form.Item>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }] }>
+                        <Select placeholder="Loại sản phẩm" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'tenSanPham']} noStyle rules={[{ required: true, message: 'Nhập tên sản phẩm' }]}>
+                        <Input placeholder="Tên sản phẩm" />
+                      </Form.Item>
+                    </div>
                   ),
+                },
+                {
+                  title: 'Kích thước (mm)',
+                  dataIndex: 'kichThuoc',
+                  width: 360,
+                  render: (_: any, field: any) => {
+                    const nhomId = form.getFieldValue(['lineInputs', field.name, 'nhomSanPhamId']);
+                    const nhom = nhomList.find((n) => n.id === nhomId);
+                    const dimensionFields = getDimensionFields(nhom);
+
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(92px, 1fr))', gap: 6 }}>
+                        {dimensionFields.map((dimension) => {
+                          const name = dimension.target === 'thamSoNhap'
+                            ? [field.name, 'thamSoNhap', dimension.paramKey ?? dimension.key]
+                            : [field.name, dimension.target];
+
+                          return (
+                            <Form.Item
+                              key={dimension.key}
+                              name={name}
+                              noStyle
+                              rules={[{ required: true, message: `Nhập ${dimension.label}` }]}
+                            >
+                              <InputNumber
+                                min={dimension.key === 'phan_manh' ? 1 : 0}
+                                step={dimension.key === 'phan_manh' ? 1 : 10}
+                                placeholder={dimension.label}
+                                addonBefore={dimension.label}
+                                style={{ width: '100%' }}
+                              />
+                            </Form.Item>
+                          );
+                        })}
+                      </div>
+                    );
+                  },
                 },
                 {
                   title: <>
@@ -262,16 +419,6 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => (
                       <Form.Item name={[field.name, 'loaiTonId']} noStyle rules={requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }] }>
                       <Select placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Mã hàng',
-                  dataIndex: 'maHang',
-                  width: 140,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'maHang']} noStyle rules={requiredRulesFor('Mã hàng') ? [{ required: true, message: 'Nhập mã hàng' }] : undefined}>
-                      <Input placeholder="Mã hàng" />
                     </Form.Item>
                   ),
                 },
@@ -294,7 +441,7 @@ export default function OrderFormPage() {
                   width: 140,
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
-                    return preview ? formatArea(preview.tongDienTichLo) : '-';
+                    return preview ? formatArea(preview.dienTichSanXuatMetToi) : '-';
                   },
                 },
                 {
@@ -345,7 +492,11 @@ export default function OrderFormPage() {
                   title: 'Đơn vị tính',
                   dataIndex: 'donViTinh',
                   width: 100,
-                  render: () => 'cái',
+                  render: (_: any, field: any) => (
+                    <Form.Item name={[field.name, 'donViTinh']} noStyle rules={requiredRulesFor('Đơn vị tính') ?? [{ required: true, message: 'Nhập đơn vị tính' }]}>
+                      <Input placeholder="cái" />
+                    </Form.Item>
+                  ),
                 },
                 {
                   title: 'Số lượng',
@@ -361,10 +512,11 @@ export default function OrderFormPage() {
                   title: 'Thuế suất',
                   dataIndex: 'thueSuatRow',
                   width: 100,
-                  render: () => {
-                    const v = form.getFieldValue('thueSuat') || 0;
-                    return `${(v * 100).toFixed(0)} %`;
-                  },
+                  render: (_: any, field: any) => (
+                    <Form.Item name={[field.name, 'thueSuat']} noStyle rules={requiredRulesFor('Thuế suất') ?? [{ required: true, message: 'Nhập thuế suất' }]}>
+                      <InputNumber min={0} max={100} step={1} addonAfter="%" style={{ width: '100%' }} />
+                    </Form.Item>
+                  ),
                 },
                 {
                   title: <>
@@ -435,10 +587,10 @@ export default function OrderFormPage() {
                                 <span style={{ fontWeight: 'bold' }}>Tổng trước thuế:</span>
                                 <span style={{ fontWeight: 'bold', color: '#1677ff', textAlign: 'right' }}>{formatMoney(totals.tongTien)} đ</span>
                               </div>
-                              {form.getFieldValue('thueSuat') > 0 && (
+                              {totals.thueTien > 0 && (
                                 <>
                                   <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', color: '#666' }}>
-                                    <span>Thuế VAT ({(form.getFieldValue('thueSuat') * 100).toFixed(0)}%):</span>
+                                    <span>Thuế VAT:</span>
                                     <span style={{ textAlign: 'right' }}>{formatMoney(totals.thueTien)} đ</span>
                                   </div>
                                   <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', paddingTop: '8px', borderTop: '2px solid #ff7a45', fontWeight: 'bold', color: '#ff7a45', fontSize: '16px' }}>
@@ -454,7 +606,7 @@ export default function OrderFormPage() {
                     )}
                   />
                   {fields.length === 0 && (
-                    <Button type="dashed" icon={<PlusOutlined />} onClick={() => add()} style={{ marginTop: 16, width: '100%' }}>
+                    <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ ...defaultLineValues })} style={{ marginTop: 16, width: '100%' }}>
                       Thêm dòng mới
                     </Button>
                   )}
@@ -485,6 +637,7 @@ export default function OrderFormPage() {
             <Card size="small" style={{ marginTop: 16, background: '#fafafa' }}>
               <Space wrap>
                 <Statistic title="S_sx/cái (m²)" value={formatArea(preview.dienTichSx1Cai)} />
+                <Statistic title="S_sx mét tới" value={formatArea(preview.dienTichSanXuatMetToi)} />
                 <Statistic title="ΣS_sx (m²)" value={formatArea(preview.tongDienTichLo)} />
                 <Statistic title="Kg" value={preview.trongLuongKg.toFixed(2)} />
                 <Statistic title="Tiền tôn" value={formatMoney(preview.thanhTienTon)} suffix="đ" />

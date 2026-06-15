@@ -22,7 +22,11 @@ public record CreateBaoGiaLineRequest(
     decimal H,
     int SoLuong,
     decimal GiaNhanCong,
-    decimal PhuKien);
+    decimal PhuKien,
+    IReadOnlyDictionary<string, decimal>? ThamSoNhap = null,
+    string? TenSanPham = null,
+    string? DonViTinh = null,
+    decimal ThueSuat = 0.08m);
 
 public record CreateBaoGiaRequest(
     string TenKhachHang,
