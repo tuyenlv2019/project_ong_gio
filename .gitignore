@@ -1,0 +1,14 @@
+# Ignore build output
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+
+# Rider
+.idea/
