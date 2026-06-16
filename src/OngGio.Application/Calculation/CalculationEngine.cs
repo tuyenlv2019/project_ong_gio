@@ -91,9 +91,6 @@ public class CalculationEngine : ICalculationEngine
             Get(0m, "R"),
             Get(0m, "r", "r(max)", "r_max"),
             Get(0m, "L"),
-            Get(8m, "mi_8", "mi 8"),
-            Get(50m, "TDC"),
-            Get(30m, "mi_Z", "mi Z"),
             thamSo));
 
         var dienTichSanXuatMetToi = areaResult.SSx1Cai / 1.2m;

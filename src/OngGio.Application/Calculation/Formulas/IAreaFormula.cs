@@ -29,9 +29,6 @@ public record AreaFormulaInput(
     decimal R,
     decimal r,
     decimal L,
-    decimal Mi8,
-    decimal Tdc,
-    decimal MiZ,
     IReadOnlyDictionary<string, decimal> Parameters)
 {
     /// <summary>

@@ -25,8 +25,6 @@ export default function ProductsPage() {
       hinhAnhMinhHoa: item?.hinhAnhMinhHoa ?? '',
       thamSo: item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo, giaTriSo: t.giaTriSo })) ?? [
         { tenThamSo: 'L', giaTriSo: 300 },
-        { tenThamSo: 'mi_8', giaTriSo: 8 },
-        { tenThamSo: 'TDC', giaTriSo: 50 },
       ],
     });
     setOpen(true);
@@ -99,7 +97,7 @@ export default function ProductsPage() {
                 {fields.map((field) => (
                   <Space key={field.key} align="baseline">
                     <Form.Item {...field} name={[field.name, 'tenThamSo']} rules={[{ required: true }]}>
-                      <Input placeholder="R, L, mi_8..." />
+                      <Input placeholder="R, L..." />
                     </Form.Item>
                     <Form.Item {...field} name={[field.name, 'giaTriSo']} rules={[{ required: true }]}>
                       <InputNumber placeholder="Giá trị" />

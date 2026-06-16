@@ -48,8 +48,15 @@ public class BaoGiaController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBaoGiaRequest request, CancellationToken ct)
     {
-        var item = await _baoGiaService.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+        try
+        {
+            var item = await _baoGiaService.CreateAsync(request, ct);
+            return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -62,8 +69,15 @@ public class BaoGiaController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateBaoGiaRequest request, CancellationToken ct)
     {
-        var item = await _baoGiaService.UpdateAsync(id, request, ct);
-        return item is null ? NotFound() : Ok(item);
+        try
+        {
+            var item = await _baoGiaService.UpdateAsync(id, request, ct);
+            return item is null ? NotFound() : Ok(item);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

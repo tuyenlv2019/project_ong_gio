@@ -36,10 +36,7 @@ public class CalculationEngineTests
     [
         new() { TenThamSo = "R", GiaTriSo = 200 },
         new() { TenThamSo = "r", GiaTriSo = 150 },
-        new() { TenThamSo = "L", GiaTriSo = 300 },
-        new() { TenThamSo = "mi_8", GiaTriSo = 8 },
-        new() { TenThamSo = "TDC", GiaTriSo = 50 },
-        new() { TenThamSo = "mi_Z", GiaTriSo = 30 }
+        new() { TenThamSo = "L", GiaTriSo = 300 }
     ];
 
     [Fact]

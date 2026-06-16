@@ -12,7 +12,7 @@ public class AreaFormulaTests
         decimal l = 0m,
         IReadOnlyDictionary<string, decimal>? parameters = null)
     {
-        return new AreaFormulaInput(w, h, rOuter, rInner, l, 8m, 50m, 30m, parameters ?? new Dictionary<string, decimal>());
+        return new AreaFormulaInput(w, h, rOuter, rInner, l, parameters ?? new Dictionary<string, decimal>());
     }
 
     [Fact]

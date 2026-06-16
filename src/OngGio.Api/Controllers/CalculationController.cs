@@ -29,7 +29,14 @@ public class CalculationController : ControllerBase
     [HttpPost("preview")]
     public async Task<IActionResult> Preview([FromBody] CalculationRequest request, CancellationToken ct)
     {
-        var result = await _baoGiaService.PreviewAsync(request, ct);
-        return Ok(result);
+        try
+        {
+            var result = await _baoGiaService.PreviewAsync(request, ct);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

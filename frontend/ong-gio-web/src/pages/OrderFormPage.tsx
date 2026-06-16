@@ -144,6 +144,41 @@ function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
   ];
 }
 
+function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField) {
+  if (field.target === 'thamSoNhap') {
+    return item.thamSoNhap?.[field.paramKey ?? field.key];
+  }
+
+  return field.target === 'w' ? item.w : item.h;
+}
+
+function isFilledNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function hasAllDimensions(item: Partial<LineFormValues> | undefined, nhom?: NhomSanPham) {
+  if (!item || !nhom) return false;
+  const dimensionFields = getDimensionFields(nhom);
+  return dimensionFields.every((field) => isFilledNumber(getDimensionValue(item, field)));
+}
+
+function hasAnyLineInput(item: Partial<LineFormValues> | undefined) {
+  if (!item) return false;
+  return Boolean(
+    item.nhomSanPhamId ||
+      item.loaiTonId ||
+      item.tenSanPham?.trim() ||
+      item.donViTinh?.trim() ||
+      item.w ||
+      item.h ||
+      item.soLuong ||
+      item.giaNhanCong ||
+      item.phuKien ||
+      item.ghiChu?.trim() ||
+      Object.keys(item.thamSoNhap ?? {}).length > 0,
+  );
+}
+
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8 };
 
 /**
@@ -231,7 +266,16 @@ export default function OrderFormPage() {
       return;
     }
     const last = items[items.length - 1];
-    const filled = last && last.tenSanPham && last.nhomSanPhamId && last.loaiTonId && last.w > 0 && last.h > 0 && last.soLuong > 0;
+    const lastNhom = nhomList.find((n) => n.id === last?.nhomSanPhamId);
+    const filled =
+      last &&
+      last.tenSanPham &&
+      last.nhomSanPhamId &&
+      last.loaiTonId &&
+      last.w > 0 &&
+      last.h > 0 &&
+      last.soLuong > 0 &&
+      hasAllDimensions(last, lastNhom);
     if (filled) {
       form.setFieldsValue({ lineInputs: [...items, { ...defaultLineValues }] });
     }
@@ -246,7 +290,8 @@ export default function OrderFormPage() {
     const previews: Record<number, CalculationResult> = {};
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
-      if (item && item.nhomSanPhamId && item.loaiTonId && item.w > 0 && item.h > 0 && item.soLuong > 0) {
+      const nhom = nhomList.find((n) => n.id === item?.nhomSanPhamId);
+      if (item && item.nhomSanPhamId && item.loaiTonId && item.w > 0 && item.h > 0 && item.soLuong > 0 && hasAllDimensions(item, nhom)) {
         try {
           previews[index] = await previewCalculation(item);
         } catch {
@@ -281,7 +326,9 @@ export default function OrderFormPage() {
   };
 
   const isRowIncomplete = (item: any) => {
-    return !item || !item.tenSanPham || !item.nhomSanPhamId || !item.loaiTonId || !item.w || item.w <= 0 || !item.h || item.h <= 0 || !item.soLuong || item.soLuong <= 0;
+    const nhom = nhomList.find((n) => n.id === item?.nhomSanPhamId);
+    if (!hasAnyLineInput(item)) return false;
+    return !item?.tenSanPham || !item?.nhomSanPhamId || !item?.loaiTonId || !item?.w || item.w <= 0 || !item?.h || item.h <= 0 || !item?.soLuong || item.soLuong <= 0 || !hasAllDimensions(item, nhom);
   };
 
   /**
@@ -322,6 +369,15 @@ export default function OrderFormPage() {
   const save = async () => {
     const header = await form.validateFields(['tenKhachHang']);
     const allLineInputs: LineFormValues[] = form.getFieldValue('lineInputs') || [];
+    const partialLines = allLineInputs.filter((l) => {
+      if (!hasAnyLineInput(l)) return false;
+      const nhom = nhomList.find((n) => n.id === l?.nhomSanPhamId);
+      return !l || !l.nhomSanPhamId || !l.loaiTonId || !l.w || l.w <= 0 || !l.h || l.h <= 0 || !l.soLuong || l.soLuong <= 0 || !hasAllDimensions(l, nhom);
+    });
+    if (partialLines.length > 0) {
+      message.warning('Nhập đủ kích thước (mm) cho từng dòng trước khi tính công thức');
+      return;
+    }
     const filtered = allLineInputs.filter((l) => l && l.nhomSanPhamId && l.loaiTonId && l.w > 0 && l.h > 0 && l.soLuong > 0);
     if (filtered.length === 0) {
       message.warning('Thêm ít nhất một cụm sản phẩm');
@@ -460,7 +516,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Diện tích<br/>Sản xuất<br/>( m2 )
+                    Diện tích Sản xuất(m2)  
                   </>,
                   dataIndex: 'dienTichSx1Cai',
                   width: 120,
@@ -471,7 +527,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Diện tích<br/>Sản xuất<br/>( mét tới )
+                    Diện tích sản xuất(mét tới)
                   </>,
                   dataIndex: 'tongDienTichLo',
                   width: 140,
