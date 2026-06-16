@@ -1,3 +1,6 @@
+/**
+ * Trang đăng nhập có captcha và xử lý trạng thái đăng nhập.
+ */
 import { Card, Form, Input, Button, message, Spin } from 'antd';
 import { LockOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';

@@ -1,3 +1,6 @@
+/**
+ * Trang tạo/sửa báo giá với preview tính toán theo từng dòng.
+ */
 
 import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
@@ -12,12 +15,13 @@ import {
   previewCalculation,
   updateBaoGia,
 } from '../api';
-// Import thư viện hoặc module cần thiết
 import type { CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
 
 const { Title, Text } = Typography;
 
-// Định dạng diện tích hiển thị với 4 chữ số thập phân
+/**
+ * Định dạng diện tích hiển thị với 4 chữ số thập phân.
+ */
 function formatArea(value: number) {
   return value.toFixed(6);
 }
@@ -29,6 +33,11 @@ type DimensionField = {
   paramKey?: string;
 };
 
+/**
+ * Chuẩn hóa chuỗi để so khớp tên nhóm sản phẩm.
+ * @param value Chuỗi gốc.
+ * @returns Chuỗi đã chuẩn hóa.
+ */
 function normalizeText(value: string) {
   return value
     .normalize('NFD')
@@ -38,6 +47,11 @@ function normalizeText(value: string) {
     .toUpperCase();
 }
 
+/**
+ * Xác định các ô kích thước cần nhập theo từng nhóm sản phẩm.
+ * @param nhom Nhóm sản phẩm đang chọn.
+ * @returns Danh sách field kích thước cần render.
+ */
 function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
   const name = normalizeText(nhom?.tenNhom ?? '');
 
@@ -132,7 +146,10 @@ function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
 
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8 };
 
-// Component chính của trang form đơn hàng
+/**
+ * Component chính của trang form đơn hàng.
+ * @returns Giao diện tạo hoặc sửa báo giá.
+ */
 export default function OrderFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -190,7 +207,7 @@ export default function OrderFormPage() {
       }
     })();
 
-    // try to load optional required-columns JSON generated from the Excel
+    // Thử tải danh sách cột bắt buộc từ file JSON sinh ra từ Excel.
     (async () => {
       try {
         const res = await fetch('/data/BANG_TINH_GIA_2026.xlsx.required.json');
@@ -198,13 +215,15 @@ export default function OrderFormPage() {
         const json = await res.json();
         if (Array.isArray(json.required)) setRequiredHeaders(json.required.map(String));
       } catch {
-        // ignore
+        // Bỏ qua nếu không tải được file cấu hình.
       }
     })();
   }, [form, id, isEdit]);
 
-  // Các hàm phụ trợ cho preview và quản lý dòng
-  // Nếu dòng cuối đã được điền, tự động thêm 1 dòng rỗng mới
+  /**
+   * Nếu dòng cuối đã được điền, tự động thêm một dòng rỗng mới.
+   * @param allValues Toàn bộ giá trị hiện tại của form.
+   */
   const ensureNewRowIfNeeded = (allValues: any) => {
     const items = allValues.lineInputs || [];
     if (items.length === 0) {
@@ -218,7 +237,10 @@ export default function OrderFormPage() {
     }
   };
 
-  // Gọi API preview cho từng dòng hợp lệ và lưu kết quả vào state
+  /**
+   * Gọi API preview cho từng dòng hợp lệ và lưu kết quả vào state.
+   * @param allValues Toàn bộ giá trị form hiện tại.
+   */
   const refreshPreviews = async (allValues: any) => {
     const items: LineFormValues[] = allValues.lineInputs || [];
     const previews: Record<number, CalculationResult> = {};
@@ -228,14 +250,17 @@ export default function OrderFormPage() {
         try {
           previews[index] = await previewCalculation(item);
         } catch {
-          // ignore preview failure for this row
+          // Bỏ qua lỗi preview của dòng này để không làm hỏng toàn bộ form.
         }
       }
     }
     setLinePreviews(previews);
   };
 
-  // Tính tổng theo các preview đã có và thuế suất hiện tại
+  /**
+   * Tính tổng theo các preview đã có và thuế suất hiện tại.
+   * @returns Tổng tiền trước thuế, tiền thuế và tổng sau thuế.
+   */
   const calculateTotals = () => {
     let totalThanhTien = 0;
     const items = form.getFieldValue('lineInputs') || [];
@@ -259,12 +284,21 @@ export default function OrderFormPage() {
     return !item || !item.tenSanPham || !item.nhomSanPhamId || !item.loaiTonId || !item.w || item.w <= 0 || !item.h || item.h <= 0 || !item.soLuong || item.soLuong <= 0;
   };
 
+  /**
+   * Sinh rule bắt buộc cho từng cột nếu file Excel yêu cầu.
+   * @param title Tên cột.
+   * @returns Rule validation hoặc undefined.
+   */
   const requiredRulesFor = (title: string) => {
     if (requiredHeaders.includes(title)) return [{ required: true, message: `${title} là bắt buộc` }];
     return undefined;
   };
 
-  // Khi có thay đổi form: cập nhật preview, selected group và tự thêm dòng nếu cần
+  /**
+   * Khi form thay đổi: cập nhật preview, nhóm đang chọn và tự thêm dòng nếu cần.
+   * @param _ Giá trị thay đổi, không dùng trực tiếp.
+   * @param allValues Toàn bộ giá trị form hiện tại.
+   */
   const onValuesChange = async (_: any, allValues: any) => {
     try {
       await refreshPreviews(allValues);
@@ -282,7 +316,9 @@ export default function OrderFormPage() {
     }
   };
 
-  // Xác thực và gửi payload tạo hoặc cập nhật báo giá lên server
+  /**
+   * Xác thực form và gửi payload tạo hoặc cập nhật báo giá lên server.
+   */
   const save = async () => {
     const header = await form.validateFields(['tenKhachHang']);
     const allLineInputs: LineFormValues[] = form.getFieldValue('lineInputs') || [];
@@ -643,7 +679,6 @@ export default function OrderFormPage() {
                 <Statistic title="Tiền tôn" value={formatMoney(preview.thanhTienTon)} suffix="đ" />
                 <Statistic title="Đơn giá" value={formatMoney(preview.donGiaCuoi)} suffix="đ" />
                 <Statistic title="Thành tiền" value={formatMoney(preview.thanhTien)} suffix="đ" />
-                {preview.apDungGiaSan && <Tag color="orange">Giá sàn &lt;1m²</Tag>}
               </Space>
             </Card>
           )}

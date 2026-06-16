@@ -1,3 +1,6 @@
+/**
+ * Layout chính sau đăng nhập: sidebar, header và vùng nội dung.
+ */
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -20,6 +23,10 @@ const menuItems = [
   { key: '/nguoi-dung', icon: <UserOutlined />, label: 'Quản lý user' },
 ];
 
+/**
+ * Layout ứng dụng sau khi đăng nhập.
+ * @returns Khung giao diện chính của hệ thống.
+ */
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();

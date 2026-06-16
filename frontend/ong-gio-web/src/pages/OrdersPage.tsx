@@ -1,3 +1,6 @@
+/**
+ * Trang danh sách báo giá, hỗ trợ sửa, xóa, đổi trạng thái và export.
+ */
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Popconfirm, Select, Space, Table, message } from 'antd';
 import dayjs from 'dayjs';

@@ -1,3 +1,4 @@
+// Entity chi tiết báo giá, lưu dữ liệu tính toán của từng dòng.
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;

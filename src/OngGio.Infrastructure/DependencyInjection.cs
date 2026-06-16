@@ -1,3 +1,4 @@
+// Đăng ký hạ tầng, DbContext, service nghiệp vụ và seed dữ liệu.
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OngGio.Application.Abstractions;
@@ -124,16 +125,14 @@ public static class DependencyInjection
                 ThuongHieu = "Tôn Hoa Sen",
                 DoDay = 0.58m,
                 DonGiaM2 = 185_000m,
-                GiaSanCoDinh = 150_000m,
-                BangBaremJson = """[{"do_day":0.58,"ty_trong":4.5},{"do_day":0.75,"ty_trong":5.8}]"""
+                KgMoiMetToi = 4.5m
             },
             new LoaiTon
             {
                 ThuongHieu = "Tôn Phương Nam",
                 DoDay = 0.75m,
                 DonGiaM2 = 210_000m,
-                GiaSanCoDinh = 175_000m,
-                BangBaremJson = """[{"do_day":0.75,"ty_trong":5.8},{"do_day":0.95,"ty_trong":7.3}]"""
+                KgMoiMetToi = 5.8m
             });
 
         await db.SaveChangesAsync();

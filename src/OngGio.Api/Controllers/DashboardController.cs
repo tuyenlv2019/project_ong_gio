@@ -8,6 +8,9 @@ using OngGio.Infrastructure.Services;
 
 namespace OngGio.Api.Controllers;
 
+/// <summary>
+/// Controller cung cấp số liệu dashboard và CRUD người dùng nội bộ.
+/// </summary>
 [ApiController]
 [Route("api/dashboard")]
 public class DashboardController : ControllerBase
@@ -16,11 +19,19 @@ public class DashboardController : ControllerBase
 
     public DashboardController(DashboardService dashboard) => _dashboard = dashboard;
 
+    /// <summary>
+    /// Lấy toàn bộ thống kê tổng quan cho dashboard.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Số liệu dashboard.</returns>
     [HttpGet]
     public async Task<IActionResult> GetStats(CancellationToken ct) =>
         Ok(await _dashboard.GetStatsAsync(ct));
 }
 
+/// <summary>
+/// Controller quản lý người dùng nội bộ của hệ thống.
+/// </summary>
 [ApiController]
 [Route("api/nguoi-dung")]
 public class NguoiDungController : ControllerBase
@@ -29,6 +40,11 @@ public class NguoiDungController : ControllerBase
 
     public NguoiDungController(OngGioDbContext db) => _db = db;
 
+    /// <summary>
+    /// Lấy danh sách người dùng và thông tin cơ bản.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Danh sách người dùng.</returns>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -36,6 +52,12 @@ public class NguoiDungController : ControllerBase
         return Ok(users.Select(u => new { u.Id, u.TenDangNhap, u.HoTen, u.VaiTro, u.DangHoatDong, u.CreatedAt }));
     }
 
+    /// <summary>
+    /// Tạo user mới.
+    /// </summary>
+    /// <param name="request">Dữ liệu user cần tạo.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>User vừa tạo.</returns>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] NguoiDungRequest request, CancellationToken ct)
     {
@@ -52,6 +74,13 @@ public class NguoiDungController : ControllerBase
         return Ok(new { user.Id, user.TenDangNhap, user.HoTen, user.VaiTro, user.DangHoatDong });
     }
 
+    /// <summary>
+    /// Cập nhật thông tin user theo id.
+    /// </summary>
+    /// <param name="id">Mã user.</param>
+    /// <param name="request">Dữ liệu cập nhật.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>User sau khi cập nhật.</returns>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] NguoiDungRequest request, CancellationToken ct)
     {
@@ -69,6 +98,12 @@ public class NguoiDungController : ControllerBase
         return Ok(new { user.Id, user.TenDangNhap, user.HoTen, user.VaiTro, user.DangHoatDong });
     }
 
+    /// <summary>
+    /// Xóa user theo id.
+    /// </summary>
+    /// <param name="id">Mã user.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>NoContent nếu xóa thành công, 404 nếu không tìm thấy.</returns>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

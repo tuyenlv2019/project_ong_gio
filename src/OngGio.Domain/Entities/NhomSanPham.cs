@@ -1,3 +1,4 @@
+// Entity nhóm sản phẩm và danh sách tham số cố định.
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;

@@ -1,13 +1,24 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using OngGio.Application.Calculation.Formulas;
 using OngGio.Domain.Entities;
 
 namespace OngGio.Application.Calculation;
 
+/// <summary>
+/// Engine trung tâm: chọn công thức, ghép tham số và tính giá trị báo giá.
+/// </summary>
 public interface ICalculationEngine
 {
+    /// <summary>
+    /// Tính toán kết quả báo giá từ nhóm sản phẩm, loại tôn và tham số đầu vào.
+    /// </summary>
+    /// <param name="nhomSanPham">Nhóm sản phẩm được chọn.</param>
+    /// <param name="loaiTon">Loại tôn được chọn.</param>
+    /// <param name="thamSoList">Danh sách tham số cố định của nhóm.</param>
+    /// <param name="request">Dữ liệu người dùng nhập.</param>
+    /// <param name="cancellationToken">Cancellation token của request.</param>
+    /// <returns>Kết quả tính toán báo giá.</returns>
     Task<CalculationResult> CalculateAsync(
         NhomSanPham nhomSanPham,
         LoaiTon loaiTon,
@@ -16,6 +27,9 @@ public interface ICalculationEngine
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Implementation của engine tính toán báo giá.
+/// </summary>
 public class CalculationEngine : ICalculationEngine
 {
     private readonly IReadOnlyDictionary<string, IAreaFormula> _formulas;
@@ -25,6 +39,15 @@ public class CalculationEngine : ICalculationEngine
         _formulas = formulas.ToDictionary(f => f.NhomKey, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Thực hiện tính toán theo công thức tương ứng với nhóm sản phẩm.
+    /// </summary>
+    /// <param name="nhomSanPham">Nhóm sản phẩm.</param>
+    /// <param name="loaiTon">Loại tôn.</param>
+    /// <param name="thamSoList">Tham số cố định.</param>
+    /// <param name="request">Dữ liệu đầu vào.</param>
+    /// <param name="cancellationToken">Cancellation token của request.</param>
+    /// <returns>Kết quả tính toán.</returns>
     public Task<CalculationResult> CalculateAsync(
         NhomSanPham nhomSanPham,
         LoaiTon loaiTon,
@@ -75,13 +98,10 @@ public class CalculationEngine : ICalculationEngine
 
         var dienTichSanXuatMetToi = areaResult.SSx1Cai / 1.2m;
         var tongDienTichLo = areaResult.SSx1Cai * request.SoLuong;
-        var apDungGiaSan = tongDienTichLo < 1.0m;
-        var thanhTienTon = apDungGiaSan
-            ? loaiTon.GiaSanCoDinh
-            : tongDienTichLo * loaiTon.DonGiaM2;
+        var apDungGiaSan = false;
+        var thanhTienTon = tongDienTichLo * loaiTon.DonGiaM2;
 
-        var tyTrong = ResolveBarem(loaiTon);
-        var trongLuongKg = tongDienTichLo * tyTrong;
+        var trongLuongKg = dienTichSanXuatMetToi * loaiTon.KgMoiMetToi;
 
         var thanhTienNhanCongPhuKien = (request.GiaNhanCong + request.PhuKien) * request.SoLuong;
         var donGiaCuoi = request.SoLuong > 0
@@ -149,28 +169,4 @@ public class CalculationEngine : ICalculationEngine
         return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    private static decimal ResolveBarem(LoaiTon loaiTon)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(loaiTon.BangBaremJson);
-            foreach (var item in doc.RootElement.EnumerateArray())
-            {
-                if (!item.TryGetProperty("do_day", out var doDayProp))
-                    continue;
-
-                if (doDayProp.GetDecimal() == loaiTon.DoDay &&
-                    item.TryGetProperty("ty_trong", out var tyTrongProp))
-                {
-                    return tyTrongProp.GetDecimal();
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // fall through to default
-        }
-
-        return 4.5m;
-    }
 }

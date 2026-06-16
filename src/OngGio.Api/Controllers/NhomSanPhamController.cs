@@ -5,6 +5,9 @@ using OngGio.Infrastructure.Persistence;
 
 namespace OngGio.Api.Controllers;
 
+/// <summary>
+/// Controller quản lý nhóm sản phẩm và các tham số cố định đi kèm.
+/// </summary>
 [ApiController]
 [Route("api/nhom-san-pham")]
 public class NhomSanPhamController : ControllerBase
@@ -13,6 +16,11 @@ public class NhomSanPhamController : ControllerBase
 
     public NhomSanPhamController(OngGioDbContext db) => _db = db;
 
+    /// <summary>
+    /// Lấy danh sách nhóm sản phẩm kèm tham số cố định.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Danh sách nhóm sản phẩm.</returns>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(await _db.NhomSanPhams.Include(x => x.ThamSoCoDinhs).OrderBy(x => x.TenNhom).ToListAsync(ct));

@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho ống thẳng.
+/// </summary>
 public class OngThangAreaFormula : IAreaFormula
 {
     public string NhomKey => "ONG_THANG";
 
+    /// <summary>
+    /// Tính diện tích cho ống thẳng.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var sSx1Cai = CalculateStraightArea(input);
@@ -11,6 +19,11 @@ public class OngThangAreaFormula : IAreaFormula
         return new AreaFormulaResult(0m, sSx1Cai / 2m, sSx1Cai / 2m, sSx1Cai, "XAC_NHAN");
     }
 
+    /// <summary>
+    /// Tính diện tích ống thẳng ở mức nội bộ.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Diện tích một cái ống thẳng.</returns>
     public static decimal CalculateStraightArea(AreaFormulaInput input)
     {
         var length = input.L > 0 ? input.L : 1000m;

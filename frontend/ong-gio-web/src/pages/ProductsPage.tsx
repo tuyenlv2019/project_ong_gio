@@ -1,3 +1,6 @@
+/**
+ * Trang quản lý nhóm sản phẩm và tham số cố định động.
+ */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, message } from 'antd';
 import { useEffect, useState } from 'react';

@@ -1,3 +1,4 @@
+// Đăng ký các công thức tính diện tích và engine tính toán.
 using Microsoft.Extensions.DependencyInjection;
 using OngGio.Application.Calculation;
 using OngGio.Application.Calculation.Formulas;

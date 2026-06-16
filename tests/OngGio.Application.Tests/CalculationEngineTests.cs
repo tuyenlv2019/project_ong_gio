@@ -29,8 +29,7 @@ public class CalculationEngineTests
         ThuongHieu = "Tôn Hoa Sen",
         DoDay = 0.58m,
         DonGiaM2 = 185_000m,
-        GiaSanCoDinh = 150_000m,
-        BangBaremJson = """[{"do_day":0.58,"ty_trong":4.5}]"""
+        KgMoiMetToi = 4.5m
     };
 
     private static List<ThamSoCoDinh> ThamSoCo90() =>
@@ -44,14 +43,15 @@ public class CalculationEngineTests
     ];
 
     [Fact]
-    public async Task ApDungGiaSan_KhiTongDienTichNhoHon1m2()
+    public async Task TinhTheoDonGiaM2_KhiTongDienTichNhoHon1m2()
     {
         var request = new CalculationRequest(1, 1, 100, 100, 1, 50_000m, 10_000m);
         var result = await _engine.CalculateAsync(Co90Nhom(), LoaiTonMau(), ThamSoCo90(), request);
 
-        Assert.True(result.ApDungGiaSan);
-        Assert.Equal(150_000m, result.ThanhTienTon);
-        Assert.Equal(result.DienTichSx1Cai / 1.2m, result.DienTichSanXuatMetToi);
+        Assert.False(result.ApDungGiaSan);
+        Assert.Equal(result.TongDienTichLo * 185_000m, result.ThanhTienTon);
+        Assert.Equal(result.DienTichSx1Cai * 1.2m, result.DienTichSanXuatMetToi);
+        Assert.Equal(result.DienTichSanXuatMetToi * LoaiTonMau().KgMoiMetToi, result.TrongLuongKg);
     }
 
     [Fact]

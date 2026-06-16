@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho tê cắt.
+/// </summary>
 public class TeCutAreaFormula : IAreaFormula
 {
     public string NhomKey => "TE_CUT";
 
+    /// <summary>
+    /// Tính diện tích cho tê cắt.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var wMax = input.Get("Wmax", 0m);

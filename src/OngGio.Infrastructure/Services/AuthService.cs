@@ -10,6 +10,9 @@ using OngGio.Infrastructure.Security;
 
 namespace OngGio.Infrastructure.Services;
 
+/// <summary>
+/// Service đăng nhập: kiểm tra user, hash mật khẩu và sinh JWT.
+/// </summary>
 public class AuthService : IAuthService
 {
     private readonly OngGioDbContext _db;
@@ -21,6 +24,13 @@ public class AuthService : IAuthService
         _configuration = configuration;
     }
 
+    /// <summary>
+    /// Xác thực tài khoản và trả về kết quả đăng nhập.
+    /// </summary>
+    /// <param name="tenDangNhap">Tên đăng nhập.</param>
+    /// <param name="matKhau">Mật khẩu người dùng.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Kết quả đăng nhập kèm JWT nếu hợp lệ.</returns>
     public async Task<AuthResult> LoginAsync(string tenDangNhap, string matKhau, CancellationToken ct = default)
     {
         var user = _db.NguoiDungs.FirstOrDefault(x => x.TenDangNhap == tenDangNhap);
@@ -46,6 +56,11 @@ public class AuthService : IAuthService
         );
     }
 
+    /// <summary>
+    /// Sinh JWT token chứa thông tin cơ bản của user.
+    /// </summary>
+    /// <param name="user">Người dùng đã được xác thực.</param>
+    /// <returns>Chuỗi JWT.</returns>
     private string GenerateJwtToken(NguoiDung user)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");

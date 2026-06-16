@@ -1,3 +1,6 @@
+/**
+ * Khai báo route chính của client, gồm trang đăng nhập và khu vực được bảo vệ.
+ */
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import DashboardPage from './pages/DashboardPage';
@@ -9,6 +12,10 @@ import UsersPage from './pages/UsersPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
+/**
+ * Component router gốc của ứng dụng web.
+ * @returns Cây route của frontend.
+ */
 export default function App() {
   return (
     <BrowserRouter>

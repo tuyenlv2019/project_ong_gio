@@ -5,6 +5,9 @@ using OngGio.Domain.Entities;
 
 namespace OngGio.Infrastructure.Persistence;
 
+/// <summary>
+/// DbContext PostgreSQL và cấu hình mapping cho toàn bộ entity.
+/// </summary>
 public class OngGioDbContext : DbContext
 {
     private readonly ICurrentUserService _currentUserService;
@@ -22,6 +25,10 @@ public class OngGioDbContext : DbContext
     public DbSet<ChiTietBaoGia> ChiTietBaoGias => Set<ChiTietBaoGia>();
     public DbSet<NguoiDung> NguoiDungs => Set<NguoiDung>();
 
+    /// <summary>
+    /// Cấu hình bảng, khóa, quan hệ và kiểu dữ liệu của từng entity.
+    /// </summary>
+    /// <param name="modelBuilder">Model builder của EF Core.</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<NhomSanPham>(e =>
@@ -45,7 +52,7 @@ public class OngGioDbContext : DbContext
             e.ToTable("loai_ton");
             e.HasKey(x => x.Id);
             e.Property(x => x.ThuongHieu).HasMaxLength(200).IsRequired();
-            e.Property(x => x.BangBaremJson).HasColumnName("bang_barem").HasColumnType("jsonb");
+            e.Property(x => x.KgMoiMetToi).HasDefaultValue(4.5m);
         });
 
         modelBuilder.Entity<BaoGia>(e =>
@@ -100,6 +107,11 @@ public class OngGioDbContext : DbContext
         });
     }
 
+    /// <summary>
+    /// Tự động gắn thông tin audit trước khi lưu dữ liệu xuống database.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token của request.</param>
+    /// <returns>Số bản ghi thay đổi.</returns>
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         var currentUserId = _currentUserService.GetCurrentUserId();

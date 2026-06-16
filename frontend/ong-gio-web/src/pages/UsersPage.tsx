@@ -1,3 +1,6 @@
+/**
+ * Trang quản lý người dùng nội bộ và phân quyền.
+ */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
 import { useEffect, useState } from 'react';

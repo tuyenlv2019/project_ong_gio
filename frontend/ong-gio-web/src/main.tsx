@@ -1,3 +1,6 @@
+/**
+ * Điểm vào của React app, mount App và nạp style cơ bản.
+ */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'antd/dist/reset.css';

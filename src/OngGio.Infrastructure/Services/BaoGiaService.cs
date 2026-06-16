@@ -8,6 +8,9 @@ using OngGio.Infrastructure.Persistence;
 
 namespace OngGio.Infrastructure.Services;
 
+/// <summary>
+/// Service nghiệp vụ báo giá: preview, CRUD, tổng hợp tiền và export Excel.
+/// </summary>
 public class BaoGiaService : IBaoGiaService
 {
     private readonly OngGioDbContext _db;
@@ -19,12 +22,24 @@ public class BaoGiaService : IBaoGiaService
         _calculationEngine = calculationEngine;
     }
 
+    /// <summary>
+    /// Tính thử một dòng báo giá để frontend preview kết quả.
+    /// </summary>
+    /// <param name="request">Dữ liệu đầu vào của dòng báo giá.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Kết quả tính toán preview.</returns>
     public async Task<CalculationResult> PreviewAsync(CalculationRequest request, CancellationToken ct = default)
     {
         var (nhom, loaiTon, thamSo) = await LoadCalculationDataAsync(request.NhomSanPhamId, request.LoaiTonId, ct);
         return await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, request, ct);
     }
 
+    /// <summary>
+    /// Tạo mới báo giá và tính toàn bộ dòng chi tiết.
+    /// </summary>
+    /// <param name="request">Dữ liệu báo giá cần tạo.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Báo giá vừa được tạo.</returns>
     public async Task<BaoGia> CreateAsync(CreateBaoGiaRequest request, CancellationToken ct = default)
     {
         var baoGia = new BaoGia
@@ -42,6 +57,13 @@ public class BaoGiaService : IBaoGiaService
         return baoGia;
     }
 
+    /// <summary>
+    /// Cập nhật thông tin báo giá và tính lại các dòng chi tiết.
+    /// </summary>
+    /// <param name="id">Mã báo giá.</param>
+    /// <param name="request">Dữ liệu cập nhật.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Báo giá sau khi cập nhật, hoặc null nếu không tìm thấy.</returns>
     public async Task<BaoGia?> UpdateAsync(int id, CreateBaoGiaRequest request, CancellationToken ct = default)
     {
         var baoGia = await _db.BaoGias
@@ -59,6 +81,12 @@ public class BaoGiaService : IBaoGiaService
         return baoGia;
     }
 
+    /// <summary>
+    /// Xóa báo giá và toàn bộ chi tiết liên quan.
+    /// </summary>
+    /// <param name="id">Mã báo giá.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>True nếu xóa thành công, ngược lại false.</returns>
     public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
         var baoGia = await _db.BaoGias
@@ -72,6 +100,13 @@ public class BaoGiaService : IBaoGiaService
         return true;
     }
 
+    /// <summary>
+    /// Cập nhật trạng thái báo giá.
+    /// </summary>
+    /// <param name="id">Mã báo giá.</param>
+    /// <param name="trangThai">Trạng thái mới.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Báo giá sau khi đổi trạng thái, hoặc null nếu không tìm thấy.</returns>
     public async Task<BaoGia?> UpdateStatusAsync(int id, string trangThai, CancellationToken ct = default)
     {
         var baoGia = await _db.BaoGias.FindAsync([id], ct);
@@ -82,6 +117,12 @@ public class BaoGiaService : IBaoGiaService
         return baoGia;
     }
 
+    /// <summary>
+    /// Lấy báo giá theo id kèm toàn bộ chi tiết và dữ liệu liên quan.
+    /// </summary>
+    /// <param name="id">Mã báo giá.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Báo giá đầy đủ hoặc null nếu không tìm thấy.</returns>
     public async Task<BaoGia?> GetByIdAsync(int id, CancellationToken ct = default)
     {
         return await _db.BaoGias
@@ -92,6 +133,11 @@ public class BaoGiaService : IBaoGiaService
             .FirstOrDefaultAsync(x => x.Id == id, ct);
     }
 
+    /// <summary>
+    /// Lấy toàn bộ báo giá theo thứ tự mới nhất trước.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Danh sách báo giá.</returns>
     public async Task<IReadOnlyList<BaoGia>> GetAllAsync(CancellationToken ct = default)
     {
         return await _db.BaoGias
@@ -99,6 +145,12 @@ public class BaoGiaService : IBaoGiaService
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Xuất báo giá ra file Excel để tải về.
+    /// </summary>
+    /// <param name="id">Mã báo giá.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Mảng byte của file Excel.</returns>
     public async Task<byte[]> ExportExcelAsync(int id, CancellationToken ct = default)
     {
         var baoGia = await GetByIdAsync(id, ct)

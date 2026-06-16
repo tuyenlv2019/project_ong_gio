@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho hộp plenum.
+/// </summary>
 public class HopPlenumAreaFormula : IAreaFormula
 {
     public string NhomKey => "HOP_PLENUM";
 
+    /// <summary>
+    /// Tính diện tích cho hộp plenum.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var length = input.L > 0 ? input.L : 300m;

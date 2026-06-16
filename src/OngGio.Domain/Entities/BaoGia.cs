@@ -1,3 +1,4 @@
+// Entity báo giá gốc, chứa thông tin khách hàng, thuế và tổng tiền.
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;

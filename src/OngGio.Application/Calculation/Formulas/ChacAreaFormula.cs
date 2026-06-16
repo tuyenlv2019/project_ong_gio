@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho nhóm Chạc.
+/// </summary>
 public class ChacAreaFormula : IAreaFormula
 {
     public string NhomKey => "CHAC";
 
+    /// <summary>
+    /// Tính diện tích cho nhóm Chạc.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var wMax = input.Get("Wmax", input.W);

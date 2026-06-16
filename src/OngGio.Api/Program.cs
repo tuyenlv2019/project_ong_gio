@@ -1,3 +1,4 @@
+// File khởi động của API: cấu hình DI, JWT, CORS, Swagger và seed dữ liệu.
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.IdentityModel.Tokens;

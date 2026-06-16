@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
+// Tiện ích hash/verify mật khẩu an toàn cho user nội bộ.
 namespace OngGio.Infrastructure.Security;
 
 public static class PasswordHasher

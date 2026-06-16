@@ -192,11 +192,6 @@ namespace OngGio.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("BangBaremJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("bang_barem");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -214,6 +209,11 @@ namespace OngGio.Infrastructure.Migrations
 
                     b.Property<decimal>("GiaSanCoDinh")
                         .HasColumnType("numeric");
+
+                    b.Property<decimal>("KgMoiMetToi")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric")
+                        .HasDefaultValue(4.5m);
 
                     b.Property<string>("ThuongHieu")
                         .IsRequired()

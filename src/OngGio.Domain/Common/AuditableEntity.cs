@@ -1,3 +1,4 @@
+// Base entity có field audit cho created/updated.
 namespace OngGio.Domain.Common;
 
 public abstract class AuditableEntity

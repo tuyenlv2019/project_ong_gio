@@ -1,3 +1,6 @@
+/**
+ * Kiểu dữ liệu dùng chung giữa các trang và API client.
+ */
 export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5273';
 
 export interface ThamSoCoDinh {
@@ -18,8 +21,7 @@ export interface LoaiTon {
   thuongHieu: string;
   doDay: number;
   donGiaM2: number;
-  giaSanCoDinh: number;
-  bangBaremJson: string;
+  kgMoiMetToi: number;
 }
 
 export interface BaoGia {

@@ -1,3 +1,4 @@
+// DTO thống kê hiển thị trên dashboard.
 namespace OngGio.Application.Services;
 
 public record DashboardStats(

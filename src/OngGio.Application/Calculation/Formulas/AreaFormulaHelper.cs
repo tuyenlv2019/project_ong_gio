@@ -1,3 +1,4 @@
+// Helper dùng chung cho các công thức diện tích.
 namespace OngGio.Application.Calculation.Formulas;
 
 internal static class AreaFormulaHelper

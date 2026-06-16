@@ -1,3 +1,6 @@
+/**
+ * Trang quản lý loại tôn và các thông số giá.
+ */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
@@ -17,9 +20,7 @@ export default function MaterialsPage() {
 
   const openModal = (item?: LoaiTon) => {
     setEditing(item ?? null);
-    form.setFieldsValue(
-      item ?? { thuongHieu: '', doDay: 0.58, donGiaM2: 185000, giaSanCoDinh: 150000, bangBaremJson: '[]' },
-    );
+    form.setFieldsValue(item ?? { thuongHieu: '', doDay: 0.58, donGiaM2: 185000, kgMoiMetToi: 4.5 });
     setOpen(true);
   };
 
@@ -52,7 +53,7 @@ export default function MaterialsPage() {
           { title: 'Thương hiệu', dataIndex: 'thuongHieu' },
           { title: 'Độ dày (mm)', dataIndex: 'doDay' },
           { title: 'Đơn giá/m²', dataIndex: 'donGiaM2', render: (v) => formatMoney(v) },
-          { title: 'Giá sàn', dataIndex: 'giaSanCoDinh', render: (v) => formatMoney(v) },
+          { title: 'Kg/mét tới', dataIndex: 'kgMoiMetToi' },
           {
             title: 'Thao tác',
             render: (_, row) => (
@@ -91,11 +92,8 @@ export default function MaterialsPage() {
           <Form.Item name="donGiaM2" label="Đơn giá/m²" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="giaSanCoDinh" label="Giá sàn (&lt;1m²)" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="bangBaremJson" label="Barem JSON">
-            <Input.TextArea rows={3} placeholder='[{"do_day":0.58,"ty_trong":4.5}]' />
+          <Form.Item name="kgMoiMetToi" label="1 mét tới = bao nhiêu kg" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} min={0} step={0.01} />
           </Form.Item>
         </Form>
       </Modal>

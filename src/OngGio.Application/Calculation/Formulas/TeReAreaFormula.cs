@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho tê rẽ.
+/// </summary>
 public class TeReAreaFormula : IAreaFormula
 {
     public string NhomKey => "TE_RE";
 
+    /// <summary>
+    /// Tính diện tích cho tê rẽ.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var branchWidth = input.Get("W'", input.Get("Wp", input.Get("W_branch", input.W)));

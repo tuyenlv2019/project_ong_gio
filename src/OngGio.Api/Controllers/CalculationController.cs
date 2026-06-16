@@ -6,6 +6,9 @@ using OngGio.Infrastructure.Persistence;
 
 namespace OngGio.Api.Controllers;
 
+/// <summary>
+/// Controller preview tính toán báo giá theo từng dòng sản phẩm.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class CalculationController : ControllerBase
@@ -17,6 +20,12 @@ public class CalculationController : ControllerBase
         _baoGiaService = baoGiaService;
     }
 
+    /// <summary>
+    /// Tính thử kết quả của một dòng báo giá mà không lưu dữ liệu.
+    /// </summary>
+    /// <param name="request">Dữ liệu đầu vào cho công thức tính toán.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Kết quả preview tính toán.</returns>
     [HttpPost("preview")]
     public async Task<IActionResult> Preview([FromBody] CalculationRequest request, CancellationToken ct)
     {

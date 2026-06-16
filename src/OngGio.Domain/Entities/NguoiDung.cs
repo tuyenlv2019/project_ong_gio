@@ -1,3 +1,4 @@
+// Entity người dùng phục vụ đăng nhập và phân quyền.
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;

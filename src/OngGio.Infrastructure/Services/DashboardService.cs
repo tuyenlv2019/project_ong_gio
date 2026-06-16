@@ -4,12 +4,20 @@ using OngGio.Infrastructure.Persistence;
 
 namespace OngGio.Infrastructure.Services;
 
+/// <summary>
+/// Service lấy số liệu tổng quan cho dashboard.
+/// </summary>
 public class DashboardService
 {
     private readonly OngGioDbContext _db;
 
     public DashboardService(OngGioDbContext db) => _db = db;
 
+    /// <summary>
+    /// Tính và trả về số liệu dashboard từ database.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Dữ liệu thống kê dashboard.</returns>
     public async Task<DashboardStats> GetStatsAsync(CancellationToken ct = default)
     {
         var orders = await _db.BaoGias.AsNoTracking().ToListAsync(ct);

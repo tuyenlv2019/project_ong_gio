@@ -1,3 +1,6 @@
+/**
+ * Trang dashboard hiển thị thống kê tổng quan của hệ thống.
+ */
 import { Card, Col, Row, Statistic, Button, Space } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';

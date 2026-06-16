@@ -1,14 +1,27 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho co 90 độ.
+/// </summary>
 public class Co90AreaFormula : IAreaFormula
 {
     public string NhomKey => "CO_90";
 
+    /// <summary>
+    /// Tính diện tích cho co 90 độ.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         return CalculateCo(input);
     }
 
+    /// <summary>
+    /// Hàm nội bộ dùng chung để tính công thức co.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     internal static AreaFormulaResult CalculateCo(AreaFormulaInput input)
     {
         var r = input.r > 0 ? input.r : Math.Max(input.R - input.W, 0m);

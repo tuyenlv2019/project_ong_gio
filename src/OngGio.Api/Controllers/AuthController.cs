@@ -3,6 +3,9 @@ using OngGio.Application.Abstractions;
 
 namespace OngGio.Api.Controllers;
 
+/// <summary>
+/// Controller xác thực, dùng để phát captcha và đăng nhập lấy JWT cho frontend.
+/// </summary>
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
@@ -16,6 +19,11 @@ public class AuthController : ControllerBase
         _captchaService = captchaService;
     }
 
+    /// <summary>
+    /// Tạo một captcha mới để frontend hiển thị cho người dùng.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Token captcha và ảnh base64 của captcha.</returns>
     [HttpGet("captcha")]
     public async Task<IActionResult> GetCaptcha(CancellationToken ct)
     {
@@ -23,6 +31,12 @@ public class AuthController : ControllerBase
         return Ok(new { token = captcha.Token, imageBase64 = captcha.ImageBase64 });
     }
 
+    /// <summary>
+    /// Xác thực tên đăng nhập, mật khẩu và captcha rồi trả JWT nếu hợp lệ.
+    /// </summary>
+    /// <param name="request">Dữ liệu đăng nhập từ client.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Token đăng nhập và thông tin user nếu thành công.</returns>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {

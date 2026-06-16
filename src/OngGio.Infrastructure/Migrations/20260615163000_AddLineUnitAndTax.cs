@@ -1,10 +1,14 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using OngGio.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace OngGio.Infrastructure.Migrations;
 
 /// <inheritdoc />
+[DbContext(typeof(OngGioDbContext))]
+[Migration("20260615163000_AddLineUnitAndTax")]
 public partial class AddLineUnitAndTax : Migration
 {
     /// <inheritdoc />

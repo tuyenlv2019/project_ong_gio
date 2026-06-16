@@ -1,3 +1,6 @@
+/**
+ * Dịch vụ đăng nhập: captcha, token, user localStorage và logout.
+ */
 import axios from 'axios';
 import { API_BASE } from './types';
 
@@ -27,7 +30,9 @@ interface CaptchaResponse {
 
 const api = axios.create({ baseURL: API_BASE });
 
-// Add token to requests if available
+/**
+ * Tự động gắn token vào header Authorization nếu đã đăng nhập.
+ */
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -37,11 +42,23 @@ api.interceptors.request.use((config) => {
 });
 
 class AuthService {
+  /**
+   * Lấy captcha mới từ backend.
+   * @returns Thông tin captcha gồm token và ảnh base64.
+   */
   async getCaptcha(): Promise<CaptchaResponse> {
     const { data } = await api.get<CaptchaResponse>('/api/auth/captcha');
     return data;
   }
 
+  /**
+   * Đăng nhập bằng captcha và lưu token vào localStorage nếu thành công.
+   * @param tenDangNhap Tên đăng nhập.
+   * @param matKhau Mật khẩu.
+   * @param captchaToken Token captcha.
+   * @param captchaValue Giá trị captcha người dùng nhập.
+   * @returns Kết quả đăng nhập.
+   */
   async login(
     tenDangNhap: string,
     matKhau: string,
@@ -56,7 +73,9 @@ class AuthService {
         captchaValue,
       });
 
-      // Store token and user info
+      /**
+       * Lưu token và user sau khi đăng nhập thành công.
+       */
       if (data.success && data.token) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
@@ -74,20 +93,35 @@ class AuthService {
     }
   }
 
+  /**
+   * Đăng xuất và xóa dữ liệu xác thực khỏi localStorage.
+   */
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   }
 
+  /**
+   * Lấy token hiện tại từ localStorage.
+   * @returns JWT token hoặc null nếu chưa đăng nhập.
+   */
   getToken(): string | null {
     return localStorage.getItem('token');
   }
 
+  /**
+   * Lấy thông tin user hiện tại từ localStorage.
+   * @returns Thông tin user hoặc null.
+   */
   getUser(): AuthUser | null {
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   }
 
+  /**
+   * Kiểm tra trạng thái đăng nhập.
+   * @returns True nếu có token hợp lệ trong localStorage.
+   */
   isAuthenticated(): boolean {
     return !!this.getToken();
   }

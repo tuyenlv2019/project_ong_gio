@@ -8,6 +8,9 @@ using OngGio.Application.Abstractions;
 
 namespace OngGio.Infrastructure.Services;
 
+/// <summary>
+/// Service captcha: tạo ảnh, lưu đáp án tạm và xác thực một lần.
+/// </summary>
 public class CaptchaService : ICaptchaService
 {
     private readonly IMemoryCache _cache;
@@ -23,6 +26,11 @@ public class CaptchaService : ICaptchaService
         _cache = cache;
     }
 
+    /// <summary>
+    /// Tạo captcha mới và lưu đáp án vào cache tạm thời.
+    /// </summary>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Token captcha và ảnh base64.</returns>
     public Task<CaptchaChallenge> CreateCaptchaAsync(CancellationToken ct = default)
     {
         var text = GenerateCaptchaText(CaptchaLength);
@@ -34,6 +42,13 @@ public class CaptchaService : ICaptchaService
         return Task.FromResult(new CaptchaChallenge(token, imageBase64));
     }
 
+    /// <summary>
+    /// Kiểm tra câu trả lời captcha theo token.
+    /// </summary>
+    /// <param name="token">Token captcha.</param>
+    /// <param name="answer">Câu trả lời người dùng nhập.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>True nếu captcha hợp lệ.</returns>
     public Task<bool> ValidateCaptchaAsync(string token, string answer, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(answer))

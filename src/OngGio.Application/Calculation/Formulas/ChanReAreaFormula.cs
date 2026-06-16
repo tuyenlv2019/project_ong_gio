@@ -1,9 +1,17 @@
 namespace OngGio.Application.Calculation.Formulas;
 
+/// <summary>
+/// Công thức diện tích cho nhóm chân rẽ.
+/// </summary>
 public class ChanReAreaFormula : IAreaFormula
 {
     public string NhomKey => "CHAN_RE";
 
+    /// <summary>
+    /// Tính diện tích cho nhóm chân rẽ.
+    /// </summary>
+    /// <param name="input">Dữ liệu đầu vào.</param>
+    /// <returns>Kết quả diện tích.</returns>
     public AreaFormulaResult Calculate(AreaFormulaInput input)
     {
         var length = input.L > 0 ? input.L : 200m;
