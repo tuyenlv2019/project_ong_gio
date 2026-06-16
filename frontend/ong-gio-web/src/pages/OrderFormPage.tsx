@@ -447,7 +447,7 @@ export default function OrderFormPage() {
                 {
                   title: 'STT',
                   dataIndex: 'stt',
-                  width: 60,
+                  width: 40,
                   render: (_: any, __: any, idx: number) => idx + 1,
                 },
                 {
@@ -516,7 +516,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Diện tích Sản xuất(m2)  
+                    ∑Ssx(m2)  
                   </>,
                   dataIndex: 'dienTichSx1Cai',
                   width: 120,
@@ -527,7 +527,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Diện tích sản xuất(mét tới)
+                    ∑Ssx(mét tới)
                   </>,
                   dataIndex: 'tongDienTichLo',
                   width: 140,
@@ -538,7 +538,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Trọng lượng<br/>( Kg)
+                    Trọng lượng(Kg)
                   </>,
                   dataIndex: 'trongLuongKg',
                   width: 100,
@@ -549,7 +549,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Giá tôn<br/>( VNĐ)
+                    Giá tôn<br/>(VNĐ)
                   </>,
                   dataIndex: 'thanhTienTon',
                   width: 140,
@@ -560,7 +560,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Giá nhân công<br/>( VNĐ)
+                    Giá nhân công(VNĐ)
                   </>,
                   dataIndex: 'giaNhanCong',
                   width: 140,
@@ -612,7 +612,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Đơn giá<br/>(VND)
+                    Đơn giá(VND)
                   </>,
                   dataIndex: 'donGiaCuoi',
                   width: 120,
@@ -623,7 +623,7 @@ export default function OrderFormPage() {
                 },
                 {
                   title: <>
-                    Thành tiền<br/>(VND)
+                    Thành tiền(VND)
                   </>,
                   dataIndex: 'thanhTien',
                   width: 140,
