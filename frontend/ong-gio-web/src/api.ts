@@ -41,7 +41,8 @@ export async function getNhomSanPhams(): Promise<NhomSanPham[]> {
 export async function createNhomSanPham(payload: {
   tenNhom: string;
   hinhAnhMinhHoa?: string;
-  thamSo?: { tenThamSo: string; giaTriSo: number }[];
+  congThucDienTich?: string;
+  thamSo?: { tenThamSo: string }[];
 }) {
   const { data } = await api.post('/api/nhom-san-pham', payload);
   return data;
@@ -55,7 +56,7 @@ export async function createNhomSanPham(payload: {
  */
 export async function updateNhomSanPham(
   id: number,
-  payload: { tenNhom: string; hinhAnhMinhHoa?: string; thamSo?: { tenThamSo: string; giaTriSo: number }[] },
+  payload: { tenNhom: string; hinhAnhMinhHoa?: string; congThucDienTich?: string; thamSo?: { tenThamSo: string }[] },
 ) {
   const { data } = await api.put(`/api/nhom-san-pham/${id}`, payload);
   return data;

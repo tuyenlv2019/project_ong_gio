@@ -37,6 +37,7 @@ public class OngGioDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.TenNhom).HasMaxLength(200).IsRequired();
             e.Property(x => x.HinhAnhMinhHoa);
+            e.Property(x => x.CongThucDienTich);
         });
 
         modelBuilder.Entity<ThamSoCoDinh>(e =>

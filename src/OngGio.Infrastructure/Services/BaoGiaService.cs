@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +31,7 @@ public class BaoGiaService : IBaoGiaService
     public async Task<CalculationResult> PreviewAsync(CalculationRequest request, CancellationToken ct = default)
     {
         var (nhom, loaiTon, thamSo) = await LoadCalculationDataAsync(request.NhomSanPhamId, request.LoaiTonId, ct);
-        EnsureDimensionsAreComplete(nhom, request);
+        EnsureDimensionsAreComplete(nhom, thamSo, request);
         return await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, request, ct);
     }
 
@@ -231,7 +229,7 @@ public class BaoGiaService : IBaoGiaService
                 line.ThamSoNhap);
 
             var (nhom, loaiTon, thamSo) = await LoadCalculationDataAsync(line.NhomSanPhamId, line.LoaiTonId, ct);
-            EnsureDimensionsAreComplete(nhom, calcRequest);
+            EnsureDimensionsAreComplete(nhom, thamSo, calcRequest);
             var result = await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, calcRequest, ct);
 
             // Ưu tiên sử dụng Giá tôn do người dùng nhập, nếu không có mới dùng kết quả tính toán tự động
@@ -281,9 +279,29 @@ public class BaoGiaService : IBaoGiaService
         return (nhom, loaiTon, thamSo);
     }
 
-    private static void EnsureDimensionsAreComplete(NhomSanPham nhom, CalculationRequest request)
+    private static void EnsureDimensionsAreComplete(
+        NhomSanPham nhom,
+        IReadOnlyList<ThamSoCoDinh> thamSoList,
+        CalculationRequest request)
     {
-        var missing = GetRequiredDimensionKeys(nhom.TenNhom)
+        var keys = thamSoList
+            .Select(x => x.TenThamSo)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToArray();
+
+        if (keys.Length == 0)
+        {
+            throw new ArgumentException(
+                $"Nhóm sản phẩm '{nhom.TenNhom}' chưa cấu hình tham số nhập. Cập nhật tại Quản lý sản phẩm.");
+        }
+
+        if (string.IsNullOrWhiteSpace(nhom.CongThucDienTich))
+        {
+            throw new ArgumentException(
+                $"Nhóm sản phẩm '{nhom.TenNhom}' chưa có công thức diện tích. Cập nhật tại Quản lý sản phẩm.");
+        }
+
+        var missing = keys
             .Where(key => !HasDimensionValue(request, key))
             .ToArray();
 
@@ -296,60 +314,18 @@ public class BaoGiaService : IBaoGiaService
 
     private static bool HasDimensionValue(CalculationRequest request, string key)
     {
-        return key switch
-        {
-            "w" => request.W > 0,
-            "h" => request.H > 0,
-            _ => request.ThamSoNhap is not null &&
-                 request.ThamSoNhap.Any(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase) && x.Value > 0)
-        };
-    }
+        var normalized = key.Trim();
+        if (string.Equals(normalized, "w", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "wmax", StringComparison.OrdinalIgnoreCase))
+            return request.W > 0;
 
-    private static IEnumerable<string> GetRequiredDimensionKeys(string tenNhom)
-    {
-        var normalized = NormalizeGroupName(tenNhom);
+        if (string.Equals(normalized, "h", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "hmax", StringComparison.OrdinalIgnoreCase))
+            return request.H > 0;
 
-        if (normalized.Contains("CO 90") || normalized.Contains("CO90") ||
-            normalized.Contains("CO 45") || normalized.Contains("CO45"))
-            return ["w", "h", "R", "r"];
-
-        if (normalized.Contains("GIAM") || normalized.Contains("CON THU"))
-            return ["w", "h", "L"];
-
-        if (normalized.Contains("BIT 01") || normalized.Contains("BIT 1") ||
-            normalized.Contains("BIT 02") || normalized.Contains("BIT 2") ||
-            normalized.Contains("ONG THANG") || normalized.Contains("ONG GIO THANG"))
-            return ["w", "h", "L", "phan_manh"];
-
-        if (normalized.Contains("BZ") || normalized.Contains("LECH TAM") || normalized.Contains("CO NGONG"))
-            return ["w", "h", "L", "DO_LECH"];
-
-        if (normalized.Contains("TE CUT"))
-            return ["w", "h", "Wmax", "r"];
-
-        if (normalized.Contains("TE RE"))
-            return ["w", "h", "Wp", "r"];
-
-        if (normalized.Contains("HOP") || normalized.Contains("PLENUM") || normalized.Contains("ZIGZAC"))
-            return ["w", "h", "L", "SO_LO", "D"];
-
-        if (normalized.Contains("CHAN RE") || normalized.Contains("GIAY KHOI HANH") || normalized.Contains("COLLAR"))
-            return ["w", "h", "L"];
-
-        if (normalized.Contains("CHAC"))
-            return [ "h", "Wmax", "R", "w1", "W3", "L"];
-
-        return ["w", "h", "L"];
-    }
-
-    private static string NormalizeGroupName(string value)
-    {
-        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
-        var chars = decomposed
-            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-            .Select(c => c is 'đ' or 'Đ' ? 'D' : char.ToUpperInvariant(c));
-
-        return new string(chars.ToArray()).Normalize(NormalizationForm.FormC);
+        return request.ThamSoNhap is not null &&
+               request.ThamSoNhap.Any(x =>
+                   string.Equals(x.Key, normalized, StringComparison.OrdinalIgnoreCase) && x.Value > 0);
     }
 
     private async Task<string> GenerateMaBaoGiaAsync(CancellationToken ct)

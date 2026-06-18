@@ -1,8 +1,8 @@
 /**
- * Trang quản lý nhóm sản phẩm và tham số cố định động.
+ * Trang quản lý nhóm sản phẩm: công thức ∑Ssx và tham số nhập trên form đơn hàng.
  */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, message } from 'antd';
+import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
 import type { NhomSanPham, ThamSoCoDinh } from '../types';
@@ -23,8 +23,11 @@ export default function ProductsPage() {
     form.setFieldsValue({
       tenNhom: item?.tenNhom ?? '',
       hinhAnhMinhHoa: item?.hinhAnhMinhHoa ?? '',
-      thamSo: item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo, giaTriSo: t.giaTriSo })) ?? [
-        { tenThamSo: 'L', giaTriSo: 300 },
+      congThucDienTich: item?.congThucDienTich ?? '',
+      thamSo: item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo })) ?? [
+        { tenThamSo: 'W' },
+        { tenThamSo: 'H' },
+        { tenThamSo: 'L' },
       ],
     });
     setOpen(true);
@@ -56,14 +59,21 @@ export default function ProductsPage() {
         rowKey="id"
         dataSource={data}
         columns={[
-          { title: 'Tên nhóm', dataIndex: 'tenNhom' },
+          { title: 'Tên nhóm', dataIndex: 'tenNhom', width: 200 },
           {
-            title: 'Kích thước tiêu chuẩn',
+            title: 'Công thức ∑Ssx (m²)',
+            dataIndex: 'congThucDienTich',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: 'Tham số nhập trên form',
             dataIndex: 'thamSoCoDinhs',
-            render: (ts: ThamSoCoDinh[]) => ts?.map((t) => `${t.tenThamSo}=${t.giaTriSo}`).join(', '),
+            width: 220,
+            render: (ts: ThamSoCoDinh[]) => ts?.map((t) => t.tenThamSo).join(', ') || '-',
           },
           {
             title: 'Thao tác',
+            width: 120,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
@@ -83,32 +93,46 @@ export default function ProductsPage() {
         ]}
       />
 
-      <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={() => setOpen(false)} width={640}>
+      <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={() => setOpen(false)} width={720}>
         <Form form={form} layout="vertical">
           <Form.Item name="tenNhom" label="Tên nhóm" rules={[{ required: true }]}>
             <Input placeholder="Co 90 độ, Ống thẳng..." />
           </Form.Item>
           <Form.Item name="hinhAnhMinhHoa" label="Ảnh minh họa (URL)">
-            <Input />
+            <Input placeholder="/images/co90.png" />
+          </Form.Item>
+          <Form.Item
+            name="congThucDienTich"
+            label="Công thức tính diện tích ∑Ssx (m²)"
+            rules={[{ required: true, message: 'Nhập công thức diện tích' }]}
+            extra="Mỗi dòng: TênBiến = biểu thức. Dòng cuối: Ssx = ... Dùng tên tham số ở trên (W, H, L, r, ...). Hỗ trợ + - * /, if(), sqrt()."
+          >
+            <Input.TextArea
+              rows={6}
+              placeholder={'R = r + W\nS_matcong = (R + 58) * (R + 58) * 2 / 1000000\nSsx = S_matcong + ...'}
+            />
           </Form.Item>
           <Form.List name="thamSo">
             {(fields, { add, remove }) => (
               <>
+                <div style={{ marginBottom: 8, fontWeight: 600 }}>Tham số người dùng nhập trên form đơn hàng</div>
                 {fields.map((field) => (
-                  <Space key={field.key} align="baseline">
-                    <Form.Item {...field} name={[field.name, 'tenThamSo']} rules={[{ required: true }]}>
-                      <Input placeholder="R, L..." />
-                    </Form.Item>
-                    <Form.Item {...field} name={[field.name, 'giaTriSo']} rules={[{ required: true }]}>
-                      <InputNumber placeholder="Giá trị" />
+                  <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, 'tenThamSo']}
+                      rules={[{ required: true, message: 'Nhập tên tham số' }]}
+                      style={{ flex: 1, marginBottom: 0 }}
+                    >
+                      <Input placeholder="W, H, L, R, r..." style={{ width: 280 }} />
                     </Form.Item>
                     <Button danger onClick={() => remove(field.name)}>
                       Xóa
                     </Button>
                   </Space>
                 ))}
-                <Button type="dashed" onClick={() => add()} block>
-                  + Thêm kích thước tiêu chuẩn
+                <Button type="dashed" onClick={() => add({ tenThamSo: '' })} block>
+                  + Thêm tham số
                 </Button>
               </>
             )}

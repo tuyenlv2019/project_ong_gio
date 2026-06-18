@@ -39,7 +39,8 @@ public class NhomSanPhamController : ControllerBase
         var item = new NhomSanPham
         {
             TenNhom = request.TenNhom,
-            HinhAnhMinhHoa = request.HinhAnhMinhHoa
+            HinhAnhMinhHoa = request.HinhAnhMinhHoa,
+            CongThucDienTich = request.CongThucDienTich
         };
         _db.NhomSanPhams.Add(item);
         await _db.SaveChangesAsync(ct);
@@ -52,7 +53,7 @@ public class NhomSanPhamController : ControllerBase
                 {
                     NhomSanPhamId = item.Id,
                     TenThamSo = t.TenThamSo,
-                    GiaTriSo = t.GiaTriSo
+                    GiaTriSo = 0
                 });
             }
             await _db.SaveChangesAsync(ct);
@@ -71,6 +72,7 @@ public class NhomSanPhamController : ControllerBase
 
         item.TenNhom = request.TenNhom;
         item.HinhAnhMinhHoa = request.HinhAnhMinhHoa;
+        item.CongThucDienTich = request.CongThucDienTich;
 
         if (request.ThamSo is not null)
         {
@@ -81,7 +83,7 @@ public class NhomSanPhamController : ControllerBase
                 item.ThamSoCoDinhs.Add(new ThamSoCoDinh
                 {
                     TenThamSo = t.TenThamSo,
-                    GiaTriSo = t.GiaTriSo
+                    GiaTriSo = 0
                 });
             }
         }
@@ -104,9 +106,10 @@ public class NhomSanPhamController : ControllerBase
     }
 }
 
-public record ThamSoRequest(string TenThamSo, decimal GiaTriSo);
+public record ThamSoRequest(string TenThamSo);
 
 public record NhomSanPhamRequest(
     string TenNhom,
     string? HinhAnhMinhHoa,
+    string? CongThucDienTich,
     List<ThamSoRequest>? ThamSo);

@@ -2,7 +2,7 @@
  * Trang tạo/sửa báo giá với preview tính toán theo từng dòng.
  */
 
-import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Col, Collapse, Form, Input, InputNumber, Row, Select, Space, Statistic, Table, Typography, message } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -41,115 +41,24 @@ type DimensionField = {
   paramKey?: string;
 };
 
-/**
- * Chuẩn hóa chuỗi để so khớp tên nhóm sản phẩm.
- * @param value Chuỗi gốc.
- * @returns Chuỗi đã chuẩn hóa.
- */
-function normalizeText(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toUpperCase();
+function mapParamToDimensionField(tenThamSo: string): DimensionField {
+  const label = tenThamSo;
+  const normalized = tenThamSo.trim().toLowerCase();
+  if (normalized === 'w' || normalized === 'wmax') {
+    return { key: tenThamSo, label, target: 'w' };
+  }
+  if (normalized === 'h' || normalized === 'hmax') {
+    return { key: tenThamSo, label, target: 'h' };
+  }
+  return { key: tenThamSo, label, target: 'thamSoNhap', paramKey: tenThamSo };
 }
 
 /**
- * Xác định các ô kích thước cần nhập theo từng nhóm sản phẩm.
- * @param nhom Nhóm sản phẩm đang chọn.
- * @returns Danh sách field kích thước cần render.
+ * Xác định các ô kích thước cần nhập theo tham số cấu hình của nhóm sản phẩm (từ DB).
  */
 function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
-  const name = normalizeText(nhom?.tenNhom ?? '');
-
-  if (name.includes('CO 90') || name.includes('CO90') || name.includes('CO 45') || name.includes('CO45')) {
-    return [
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
-      { key: 'R', label: 'R', target: 'thamSoNhap', paramKey: 'R' },
-    ];
-  }
-
-  if (name.includes('GIAM') || name.includes('CON THU')) {
-    return [
-      { key: 'w', label: 'Wmax', target: 'w' },
-      { key: 'h', label: 'Hmax', target: 'h' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-    ];
-  }
-
-  if (name.includes('BIT 01') || name.includes('BIT 1') || name.includes('BIT 02') || name.includes('BIT 2') || name.includes('ONG THANG') || name.includes('ONG GIO THANG')) {
-    return [
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-      { key: 'phan_manh', label: 'Mảnh', target: 'thamSoNhap', paramKey: 'phan_manh' },
-    ];
-  }
-
-  if (name.includes('BZ') || name.includes('LECH TAM') || name.includes('CO NGONG')) {
-    return [
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-      { key: 'DO_LECH', label: 'Độ lệch', target: 'thamSoNhap', paramKey: 'DO_LECH' },
-    ];
-  }
-
-  if (name.includes('TE CUT')) {
-    return [
-      { key: 'Wmax', label: 'Wmax', target: 'thamSoNhap', paramKey: 'Wmax' },
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
-    ];
-  }
-
-  if (name.includes('TE RE')) {
-    return [
-      { key: 'Wp', label: "W'", target: 'thamSoNhap', paramKey: 'Wp' },
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'r', label: 'r', target: 'thamSoNhap', paramKey: 'r' },
-    ];
-  }
-
-  if (name.includes('HOP') || name.includes('PLENUM') || name.includes('ZIGZAC')) {
-    return [
-      { key: 'SO_LO', label: 'Số lỗ', target: 'thamSoNhap', paramKey: 'SO_LO' },
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-      { key: 'D', label: 'Ø', target: 'thamSoNhap', paramKey: 'D' },
-    ];
-  }
-
-  if (name.includes('CHAN RE') || name.includes('GIAY KHOI HANH') || name.includes('COLLAR')) {
-    return [
-      { key: 'w', label: 'W', target: 'w' },
-      { key: 'h', label: 'H', target: 'h' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-    ];
-  }
-
-  if (name.includes('CHAC')) {
-    return [
-      { key: 'Wmax', label: 'Wmax', target: 'thamSoNhap', paramKey: 'Wmax' },
-      { key: 'R', label: 'R', target: 'thamSoNhap', paramKey: 'R' },
-      { key: 'w1', label: 'w1', target: 'thamSoNhap', paramKey: 'w1' },
-      { key: 'W3', label: 'W3', target: 'thamSoNhap', paramKey: 'W3' },
-      { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-      { key: 'h', label: 'H', target: 'h' },
-    ];
-  }
-
-  return [
-    { key: 'w', label: 'W', target: 'w' },
-    { key: 'h', label: 'H', target: 'h' },
-    { key: 'L', label: 'L', target: 'thamSoNhap', paramKey: 'L' },
-  ];
+  return (nhom?.thamSoCoDinhs?.map((t) => t.tenThamSo).filter(Boolean) ?? [])
+    .map(mapParamToDimensionField);
 }
 
 function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField) {
@@ -169,6 +78,51 @@ function hasAllDimensions(item: Partial<LineFormValues> | undefined, nhom?: Nhom
   if (!item || !nhom) return false;
   const dimensionFields = getDimensionFields(nhom);
   return dimensionFields.every((field) => isFilledNumber(getDimensionValue(item, field)));
+}
+
+function getMissingLineFields(item: Partial<LineFormValues>, nhom?: NhomSanPham): string[] {
+  const missing: string[] = [];
+  if (!item.tenSanPham?.trim()) missing.push('tên sản phẩm');
+  if (!item.nhomSanPhamId) missing.push('loại sản phẩm');
+  if (!item.loaiTonId) missing.push('loại tôn');
+  if (!item.soLuong || item.soLuong <= 0) missing.push('số lượng');
+  if (!item.donViTinh?.trim()) missing.push('đơn vị tính');
+  if (item.thueSuat === undefined || item.thueSuat === null) missing.push('thuế suất');
+
+  if (nhom) {
+    getDimensionFields(nhom).forEach((field) => {
+      if (!isFilledNumber(getDimensionValue(item, field))) {
+        missing.push(field.label);
+      }
+    });
+  }
+
+  return missing;
+}
+
+function describeIncompleteLine(
+  lineIndex: number,
+  item: Partial<LineFormValues>,
+  nhom?: NhomSanPham,
+): string {
+  const missing = getMissingLineFields(item, nhom);
+  const displayName = item.tenSanPham?.trim() || nhom?.tenNhom || 'chưa đặt tên';
+  return `Dòng ${lineIndex + 1} (${displayName}): thiếu ${missing.join(', ')}`;
+}
+
+function showMultiLineWarning(messages: string[]) {
+  message.warning({
+    content: (
+      <div style={{ textAlign: 'left', maxWidth: 520 }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{ marginTop: i > 0 ? 6 : 0 }}>
+            {msg}
+          </div>
+        ))}
+      </div>
+    ),
+    duration: Math.min(4 + messages.length * 2, 12),
+  });
 }
 
 function hasAnyLineInput(item: Partial<LineFormValues> | undefined) {
@@ -280,8 +234,6 @@ export default function OrderFormPage() {
       last.tenSanPham &&
       last.nhomSanPhamId &&
       last.loaiTonId &&
-      last.w > 0 &&
-      last.h > 0 &&
       last.soLuong > 0 &&
       hasAllDimensions(last, lastNhom);
     if (filled) {
@@ -355,10 +307,14 @@ export default function OrderFormPage() {
     if (!hasAnyLineInput(item)) return false;
     
     return (
-      !item?.tenSanPham || 
-      !item?.nhomSanPhamId || 
-      !item?.loaiTonId || 
-      !item?.soLuong || item.soLuong <= 0 || 
+      !item?.tenSanPham?.trim() ||
+      !item?.nhomSanPhamId ||
+      !item?.loaiTonId ||
+      !item?.soLuong ||
+      item.soLuong <= 0 ||
+      !item?.donViTinh?.trim() ||
+      item?.thueSuat === undefined ||
+      item?.thueSuat === null ||
       !hasAllDimensions(item, nhom)
     );
   };
@@ -382,9 +338,9 @@ export default function OrderFormPage() {
     try {
       await refreshPreviews(allValues);
       const items = allValues.lineInputs || [];
-      const last = items[items.length - 1];
-      if (last && last.nhomSanPhamId) {
-        const found = nhomList.find((n) => n.id === Number(last.nhomSanPhamId));
+      const rowWithNhom = [...items].reverse().find((item) => item?.nhomSanPhamId);
+      if (rowWithNhom?.nhomSanPhamId) {
+        const found = nhomList.find((n) => n.id === Number(rowWithNhom.nhomSanPhamId));
         setSelectedNhomRow(found);
       } else {
         setSelectedNhomRow(undefined);
@@ -399,32 +355,35 @@ export default function OrderFormPage() {
    * Xác thực form và gửi payload tạo hoặc cập nhật báo giá lên server.
    */
   const save = async () => {
-    const header = await form.validateFields(['tenKhachHang']);
+    let header: { tenKhachHang: string };
+    try {
+      header = await form.validateFields(['tenKhachHang']);
+    } catch (err: unknown) {
+      const firstError = (err as { errorFields?: { errors?: string[] }[] })?.errorFields?.[0]?.errors?.[0];
+      message.warning(firstError ?? 'Vui lòng nhập tên khách hàng');
+      return;
+    }
     const allLineInputs: LineFormValues[] = form.getFieldValue('lineInputs') || [];
-    const partialLines = allLineInputs.filter((l) => {
-      if (!hasAnyLineInput(l)) return false;
-      const nhom = nhomList.find((n) => n.id === l?.nhomSanPhamId);
-      return isRowIncomplete(l);
-    });
-    if (partialLines.length > 0) {
-      message.warning('Nhập đủ kích thước (mm) cho từng dòng trước khi tính công thức');
+    const incompleteMessages = allLineInputs
+      .map((line, index) => {
+        if (!hasAnyLineInput(line)) return null;
+        const nhom = nhomList.find((n) => n.id === Number(line?.nhomSanPhamId));
+        if (!isRowIncomplete(line)) return null;
+        return describeIncompleteLine(index, line, nhom);
+      })
+      .filter((msg): msg is string => Boolean(msg));
+
+    if (incompleteMessages.length > 0) {
+      showMultiLineWarning(incompleteMessages);
       return;
     }
     const filtered = allLineInputs.filter((l) => {
-      const nhom = nhomList.find((n) => n.id === l?.nhomSanPhamId);
+      const nhom = nhomList.find((n) => n.id === Number(l?.nhomSanPhamId));
       return l && l.nhomSanPhamId && l.loaiTonId && l.soLuong > 0 && hasAllDimensions(l, nhom);
     });
 
     if (filtered.length === 0) {
       message.warning('Thêm ít nhất một cụm sản phẩm');
-      return;
-    }
-    if (filtered.some((l) => !l.tenSanPham?.trim())) {
-      message.warning('Nhập tên sản phẩm cho từng dòng');
-      return;
-    }
-    if (filtered.some((l) => !l.donViTinh?.trim() || l.thueSuat === undefined || l.thueSuat === null)) {
-      message.warning('Nhập đơn vị tính và thuế suất cho từng dòng');
       return;
     }
     setLoading(true);
@@ -466,11 +425,22 @@ export default function OrderFormPage() {
   return (
     <div>
       <Title level={3}>{isEdit ? 'Sửa đơn hàng' : 'Tạo đơn hàng mới'}</Title>
-      <Form form={form} layout="vertical" onValuesChange={onValuesChange}>
+      <Form
+        form={form}
+        layout="vertical"
+        onValuesChange={onValuesChange}
+        validateMessages={{
+          required: 'Vui lòng nhập ${label}',
+        }}
+      >
         <Card title="Thông tin đơn hàng" style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="tenKhachHang" label="Tên khách hàng" rules={[{ required: true }]}>
+              <Form.Item
+                name="tenKhachHang"
+                label="Tên khách hàng"
+                rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
+              >
                 <Input />
               </Form.Item>
             </Col>
@@ -503,7 +473,7 @@ export default function OrderFormPage() {
                       <div className="price-field-row">
                         <span className="price-field-label">Tên sản phẩm</span>
                         <Form.Item name={[field.name, 'tenSanPham']} noStyle rules={[{ required: true, message: 'Nhập tên sản phẩm' }]}>
-                          <Input placeholder="Nhập tên" />
+                          <Input placeholder="Nhập tên sản phẩm" />
                         </Form.Item>
                       </div>
                     </div>
@@ -856,15 +826,45 @@ export default function OrderFormPage() {
                     td {
                       padding-inline: 1px !important;
                     }
+                    .order-formula-block {
+                      margin: 0;
+                      padding: 8px 10px;
+                      font-size: 11px;
+                      line-height: 1.45;
+                      white-space: pre-wrap;
+                      word-break: break-word;
+                      background: #fafafa;
+                      border: 1px solid #f0f0f0;
+                      border-radius: 4px;
+                      max-height: 160px;
+                      overflow: auto;
+                    }
                   `}</style>
                 </>
               );
             }}
           </Form.List>
           {selectedNhomRow && (
-            <Text type="secondary">
-              Kích thước tiêu chuẩn: {selectedNhomRow.thamSoCoDinhs.map((t) => `${t.tenThamSo}=${t.giaTriSo}`).join(' | ')}
-            </Text>
+            <Collapse
+              size="small"
+              style={{ marginTop: 12 }}
+              items={[
+                {
+                  key: 'cong-thuc',
+                  label: `Công thức ∑Ssx (m²) — ${selectedNhomRow.tenNhom}`,
+                  children: (
+                    <div>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                        Tham số form: {selectedNhomRow.thamSoCoDinhs?.map((t) => t.tenThamSo).join(', ') || '—'}
+                      </Text>
+                      <pre className="order-formula-block">
+                        {selectedNhomRow.congThucDienTich || '—'}
+                      </pre>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           )}
           {preview && (
             <Card size="small" style={{ marginTop: 16, background: '#fafafa' }}>

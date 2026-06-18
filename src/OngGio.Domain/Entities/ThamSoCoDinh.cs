@@ -1,4 +1,4 @@
-// Entity tham số cố định của từng nhóm sản phẩm.
+// Entity tham số đầu vào (tên field) mà người dùng nhập trên form đơn hàng.
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;

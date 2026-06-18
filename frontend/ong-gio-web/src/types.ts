@@ -13,6 +13,7 @@ export interface NhomSanPham {
   id: number;
   tenNhom: string;
   hinhAnhMinhHoa?: string;
+  congThucDienTich?: string;
   thamSoCoDinhs: ThamSoCoDinh[];
 }
 
@@ -117,4 +118,5 @@ export interface LineFormValues {
   phuKien: number;
   thamSoNhap?: Record<string, number>;
   ghiChu?: string;
+  thanhTienTon?: number;
 }

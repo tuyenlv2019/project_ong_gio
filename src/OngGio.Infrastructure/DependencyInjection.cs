@@ -1,6 +1,7 @@
 // Đăng ký hạ tầng, DbContext, service nghiệp vụ và seed dữ liệu.
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OngGio.Application.Calculation;
 using OngGio.Application.Abstractions;
 using OngGio.Application.Services;
 using OngGio.Domain.Entities;
@@ -40,31 +41,51 @@ public static class DependencyInjection
 
     private static async Task SeedNhomSanPhamAsync(OngGioDbContext db)
     {
-        var groups = new (string TenNhom, string HinhAnh, (string Ten, decimal GiaTri)[] ThamSo)[]
+        var groups = new (string TenNhom, string HinhAnh, string CongThuc, string[] ThamSoForm)[]
         {
-            ("Co 90 độ", "/images/co90.png", [("R", 200), ("r", 150), ("L", 300)]),
-            ("Co 45 độ", "/images/co45.png", [("R", 200), ("r", 150), ("L", 250)]),
-            ("Ống gió thẳng", "/images/ong-thang.png", [("L", 1200), ("phan_manh", 1)]),
-            ("Ống gió bít 01 đầu", "/images/ong-bit-1-dau.png", [("L", 1200), ("phan_manh", 1)]),
-            ("Ống gió bít 02 đầu", "/images/ong-bit-2-dau.png", [("L", 1200), ("phan_manh", 1)]),
-            ("Giảm (Côn thu)", "/images/giam.png", [("L", 350)]),
-            ("BZ (Ống lệch tâm)", "/images/bz.png", [("L", 1000), ("DO_LECH", 300)]),
-            ("Tê cụt", "/images/te-cut.png", [("Wmax", 500), ("r", 150)]),
-            ("Tê rẽ", "/images/te-re.png", [("Wp", 250), ("r", 150)]),
-            ("Hộp chụp miệng gió thẳng", "/images/hop-plenum.png", [("L", 500), ("SO_LO", 1), ("D", 200), ("curon_L", 120)]),
-            ("Chân rẽ", "/images/chan-re.png", [("R", 300), ("L", 400)]),
-            ("Chân rẽ tròn", "/images/chan-re-tron.png", [("R", 300), ("L", 400)]),
-            ("Chạc", "/images/chac.png", [("Wmax", 500), ("R", 150), ("w1", 250), ("W3", 300), ("L", 1000)]),
-            ("Côn chuyển", "/images/con-chuyen.png", [("L", 300)]),
-            ("Y ống gió", "/images/y-ong-gio.png", [("L", 500)]),
-            ("Van VCD", "/images/van-vcd.png", [("L", 200)]),
-            ("Van VCD tròn", "/images/van-vcd-tron.png", [("L", 200)]),
-            ("Máng cáp có nắp", "/images/mang-cap-co-nap.png", [("L", 1000)]),
-            ("Máng cáp không nắp", "/images/mang-cap-khong-nap.png", [("L", 1000)]),
-            ("Thang máng cáp", "/images/thang-mang-cap.png", [("L", 1000)]),
+            ("Co 90 độ", "/images/co90.png", StandardProductFormulas.Co,
+                ["W", "H", "R", "r"]),
+            ("Co 45 độ", "/images/co45.png", StandardProductFormulas.Co,
+                ["W", "H", "R", "r"]),
+            ("Ống gió thẳng", "/images/ong-thang.png", StandardProductFormulas.OngThang,
+                ["W", "H", "L", "phan_manh"]),
+            ("Ống gió bít 01 đầu", "/images/ong-bit-1-dau.png", StandardProductFormulas.OngBitMotDau,
+                ["W", "H", "L", "phan_manh"]),
+            ("Ống gió bít 02 đầu", "/images/ong-bit-2-dau.png", StandardProductFormulas.OngBitHaiDau,
+                ["W", "H", "L", "phan_manh"]),
+            ("Giảm (Côn thu)", "/images/giam.png", StandardProductFormulas.Giam,
+                ["W", "H", "L"]),
+            ("BZ (Ống lệch tâm)", "/images/bz.png", StandardProductFormulas.Bz,
+                ["W", "H", "L", "DO_LECH"]),
+            ("Tê cụt", "/images/te-cut.png", StandardProductFormulas.TeCut,
+                ["W", "H", "Wmax", "r"]),
+            ("Tê rẽ", "/images/te-re.png", StandardProductFormulas.TeRe,
+                ["W", "H", "Wp", "L"]),
+            ("Hộp chụp miệng gió thẳng", "/images/hop-plenum.png", StandardProductFormulas.HopPlenum,
+                ["W", "H", "L", "SO_LO", "D"]),
+            ("Chân rẽ", "/images/chan-re.png", StandardProductFormulas.ChanRe,
+                ["W", "H", "L"]),
+            ("Chân rẽ tròn", "/images/chan-re-tron.png", "",
+                ["D", "L"]),
+            ("Chạc", "/images/chac.png", StandardProductFormulas.Chac,
+                ["Wmax", "R", "w1", "W3", "H", "L"]),
+            ("Côn chuyển", "/images/con-chuyen.png", "",
+                ["W", "H", "D", "L"]),
+            ("Y ống gió", "/images/y-ong-gio.png", "",
+                ["W", "H", "L"]),
+            ("Van VCD", "/images/van-vcd.png", "",
+                ["W", "H", "L"]),
+            ("Van VCD tròn", "/images/van-vcd-tron.png", "",
+                ["D", "L"]),
+            ("Máng cáp có nắp", "/images/mang-cap-co-nap.png", "",
+                ["W", "H", "L"]),
+            ("Máng cáp không nắp", "/images/mang-cap-khong-nap.png", "",
+                ["W", "H", "L"]),
+            ("Thang máng cáp", "/images/thang-mang-cap.png", "",
+                ["W", "H", "L"]),
         };
 
-        foreach (var (tenNhom, hinhAnh, thamSo) in groups)
+        foreach (var (tenNhom, hinhAnh, congThuc, thamSoForm) in groups)
         {
             var nhom = await db.NhomSanPhams
                 .Include(x => x.ThamSoCoDinhs)
@@ -72,7 +93,12 @@ public static class DependencyInjection
 
             if (nhom is null)
             {
-                nhom = new NhomSanPham { TenNhom = tenNhom, HinhAnhMinhHoa = hinhAnh };
+                nhom = new NhomSanPham
+                {
+                    TenNhom = tenNhom,
+                    HinhAnhMinhHoa = hinhAnh,
+                    CongThucDienTich = congThuc
+                };
                 db.NhomSanPhams.Add(nhom);
                 await db.SaveChangesAsync();
             }
@@ -80,24 +106,30 @@ public static class DependencyInjection
             {
                 nhom.TenNhom = tenNhom;
                 nhom.HinhAnhMinhHoa = hinhAnh;
+                nhom.CongThucDienTich = congThuc;
             }
 
-            foreach (var (ten, giaTri) in thamSo)
+            var desiredParams = thamSoForm.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var obsolete in nhom.ThamSoCoDinhs.Where(x => !desiredParams.Contains(x.TenThamSo)).ToList())
+                nhom.ThamSoCoDinhs.Remove(obsolete);
+
+            foreach (var ten in thamSoForm)
             {
                 var existingParam = nhom.ThamSoCoDinhs
-                    .FirstOrDefault(x => string.Equals(x.TenThamSo, ten, StringComparison.Ordinal));
+                    .FirstOrDefault(x => string.Equals(x.TenThamSo, ten, StringComparison.OrdinalIgnoreCase));
 
                 if (existingParam is null)
                 {
                     nhom.ThamSoCoDinhs.Add(new ThamSoCoDinh
                     {
                         TenThamSo = ten,
-                        GiaTriSo = giaTri
+                        GiaTriSo = 0
                     });
                 }
                 else
                 {
-                    existingParam.GiaTriSo = giaTri;
+                    existingParam.TenThamSo = ten;
+                    existingParam.GiaTriSo = 0;
                 }
             }
 
