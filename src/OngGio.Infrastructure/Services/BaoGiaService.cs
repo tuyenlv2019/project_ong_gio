@@ -234,6 +234,10 @@ public class BaoGiaService : IBaoGiaService
             EnsureDimensionsAreComplete(nhom, calcRequest);
             var result = await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, calcRequest, ct);
 
+            // Ưu tiên sử dụng Giá tôn do người dùng nhập, nếu không có mới dùng kết quả tính toán tự động
+            var finalThanhTienTon = line.ThanhTienTon > 0 ? line.ThanhTienTon : result.ThanhTienTon;
+            var finalThanhTien = result.ThanhTien + (finalThanhTienTon - result.ThanhTienTon);
+
             baoGia.ChiTietBaoGias.Add(new ChiTietBaoGia
             {
                 NhomSanPhamId = line.NhomSanPhamId,
@@ -252,14 +256,14 @@ public class BaoGiaService : IBaoGiaService
                 DienTichSx1Cai = result.DienTichSx1Cai,
                 TongDienTichLo = result.TongDienTichLo,
                 TrongLuongKg = result.TrongLuongKg,
-                ThanhTienTon = result.ThanhTienTon,
-                DonGiaCuoi = result.DonGiaCuoi,
-                ThanhTien = result.ThanhTien,
+                ThanhTienTon = finalThanhTienTon,
+                DonGiaCuoi = line.SoLuong > 0 ? finalThanhTien / line.SoLuong : 0,
+                ThanhTien = finalThanhTien,
                 TrangThaiCongThuc = result.TrangThaiCongThuc
             });
 
-            tongTruocThue += result.ThanhTien;
-            tongSauThue += result.ThanhTien * (1 + line.ThueSuat);
+            tongTruocThue += finalThanhTien;
+            tongSauThue += finalThanhTien * (1 + line.ThueSuat);
         }
 
         baoGia.TongTienTruocThue = tongTruocThue;
@@ -333,7 +337,7 @@ public class BaoGiaService : IBaoGiaService
             return ["w", "h", "L"];
 
         if (normalized.Contains("CHAC"))
-            return ["w", "h", "Wmax", "R", "w1", "W3", "L"];
+            return [ "h", "Wmax", "R", "w1", "W3", "L"];
 
         return ["w", "h", "L"];
     }

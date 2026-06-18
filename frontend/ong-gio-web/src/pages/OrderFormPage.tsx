@@ -16,14 +16,22 @@ import {
   updateBaoGia,
 } from '../api';
 import type { CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
+import { API_BASE } from '../types';
 
 const { Title, Text } = Typography;
 
 /**
- * Định dạng diện tích hiển thị với 4 chữ số thập phân.
+ * Định dạng diện tích hiển thị với 6 chữ số thập phân.
  */
 function formatArea(value: number) {
   return value.toFixed(6);
+}
+
+function resolveMasterImageUrl(path?: string) {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith('/')) return `${API_BASE}${path}`;
+  return path;
 }
 
 type DimensionField = {
@@ -153,7 +161,8 @@ function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField)
 }
 
 function isFilledNumber(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0;
 }
 
 function hasAllDimensions(item: Partial<LineFormValues> | undefined, nhom?: NhomSanPham) {
@@ -167,7 +176,7 @@ function hasAnyLineInput(item: Partial<LineFormValues> | undefined) {
   return Boolean(
     item.nhomSanPhamId ||
       item.loaiTonId ||
-      item.tenSanPham?.trim() ||
+      item.tenSanPham?.trim() || // This line is not needed for the fix, but it's part of the original code.
       item.donViTinh?.trim() ||
       item.w ||
       item.h ||
@@ -179,7 +188,23 @@ function hasAnyLineInput(item: Partial<LineFormValues> | undefined) {
   );
 }
 
-const defaultLineValues = { donViTinh: 'cái', thueSuat: 8 };
+const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
+
+function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
+  if (nhoms?.[0] && tons?.[0]) {
+    return {
+      ...defaultLineValues,
+      nhomSanPhamId: nhoms[0].id,
+      loaiTonId: tons[0].id,
+      w: 0,
+      h: 0,
+      soLuong: 1,
+      giaNhanCong: 0,
+      phuKien: 0,
+    };
+  }
+  return { ...defaultLineValues };
+}
 
 /**
  * Component chính của trang form đơn hàng.
@@ -190,6 +215,7 @@ export default function OrderFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const lineInputs = Form.useWatch('lineInputs', form);
   const [nhomList, setNhomList] = useState<NhomSanPham[]>([]);
   const [loaiTonList, setLoaiTonList] = useState<LoaiTon[]>([]);
   const [preview, setPreview] = useState<CalculationResult | null>(null);
@@ -215,42 +241,24 @@ export default function OrderFormPage() {
           loaiTonId: c.loaiTon?.id ?? 0,
           w: c.wInput,
           h: c.hInput,
-          thamSoNhap: c.thamSoNhapJson ? JSON.parse(c.thamSoNhapJson) : undefined,
+          thanhTienTon: c.thanhTienTon,
+          thamSoNhap: c.thamSoNhapJson ? JSON.parse(c.thamSoNhapJson) : {},
           soLuong: c.soLuong,
           giaNhanCong: c.giaNhanCong ?? 0,
           phuKien: c.phuKien ?? 0,
           ghiChu: c.ghiChu,
         }));
-        form.setFieldsValue({ lineInputs: initialLines.length > 0 ? initialLines : [{}] });
+        const lineInputs = initialLines.length > 0
+          ? [...initialLines, createEmptyLine(nhoms, tons)]
+          : [createEmptyLine(nhoms, tons)];
+        form.setFieldsValue({ lineInputs });
         if (initialLines.length > 0) {
-          await refreshPreviews({ lineInputs: initialLines });
+          await refreshPreviews({ lineInputs }, nhoms);
         }
       } else if (nhoms[0] && tons[0]) {
         form.setFieldsValue({
-          lineInputs: [{
-            donViTinh: 'cái',
-            thueSuat: 8,
-            nhomSanPhamId: nhoms[0].id,
-            loaiTonId: tons[0].id,
-            w: 400,
-            h: 300,
-            soLuong: 1,
-            giaNhanCong: 50000,
-            phuKien: 10000,
-          }],
+          lineInputs: [createEmptyLine(nhoms, tons)],
         });
-      }
-    })();
-
-    // Thử tải danh sách cột bắt buộc từ file JSON sinh ra từ Excel.
-    (async () => {
-      try {
-        const res = await fetch('/data/BANG_TINH_GIA_2026.xlsx.required.json');
-        if (!res.ok) return;
-        const json = await res.json();
-        if (Array.isArray(json.required)) setRequiredHeaders(json.required.map(String));
-      } catch {
-        // Bỏ qua nếu không tải được file cấu hình.
       }
     })();
   }, [form, id, isEdit]);
@@ -262,11 +270,11 @@ export default function OrderFormPage() {
   const ensureNewRowIfNeeded = (allValues: any) => {
     const items = allValues.lineInputs || [];
     if (items.length === 0) {
-      form.setFieldsValue({ lineInputs: [{ ...defaultLineValues }] });
+      form.setFieldsValue({ lineInputs: [createEmptyLine(nhomList, loaiTonList)] });
       return;
     }
     const last = items[items.length - 1];
-    const lastNhom = nhomList.find((n) => n.id === last?.nhomSanPhamId);
+    const lastNhom = nhomList.find((n) => n.id === Number(last?.nhomSanPhamId));
     const filled =
       last &&
       last.tenSanPham &&
@@ -277,23 +285,36 @@ export default function OrderFormPage() {
       last.soLuong > 0 &&
       hasAllDimensions(last, lastNhom);
     if (filled) {
-      form.setFieldsValue({ lineInputs: [...items, { ...defaultLineValues }] });
+      form.setFieldsValue({ lineInputs: [...items, createEmptyLine(nhomList, loaiTonList)] });
     }
   };
 
   /**
    * Gọi API preview cho từng dòng hợp lệ và lưu kết quả vào state.
    * @param allValues Toàn bộ giá trị form hiện tại.
+   * @param customNhomList Danh sách nhóm sản phẩm (dùng khi state chưa cập nhật kịp).
    */
-  const refreshPreviews = async (allValues: any) => {
+  const refreshPreviews = async (allValues: any, customNhomList?: NhomSanPham[]) => {
     const items: LineFormValues[] = allValues.lineInputs || [];
     const previews: Record<number, CalculationResult> = {};
+    const currentNhomList = customNhomList || nhomList;
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index];
-      const nhom = nhomList.find((n) => n.id === item?.nhomSanPhamId);
-      if (item && item.nhomSanPhamId && item.loaiTonId && item.w > 0 && item.h > 0 && item.soLuong > 0 && hasAllDimensions(item, nhom)) {
+      const nhom = currentNhomList.find((n) => n.id === Number(item?.nhomSanPhamId));
+      const canPreview = item && item.nhomSanPhamId && item.loaiTonId && Number(item.soLuong) > 0 && hasAllDimensions(item, nhom);
+      if (canPreview) {
         try {
-          previews[index] = await previewCalculation(item);
+          // Chuẩn hóa payload tương đương logic khi lưu
+          const res = await previewCalculation({
+            ...item,
+            thueSuat: (item.thueSuat ?? 0) / 100,
+          } as any);
+          previews[index] = res;
+
+          // Tự động điền Giá tôn từ kết quả tính toán nếu người dùng chưa nhập thủ công
+          if (item.thanhTienTon === undefined || item.thanhTienTon === null) {
+            form.setFieldValue(['lineInputs', index, 'thanhTienTon'], res.thanhTienTon);
+          }
         } catch {
           // Bỏ qua lỗi preview của dòng này để không làm hỏng toàn bộ form.
         }
@@ -312,9 +333,13 @@ export default function OrderFormPage() {
     let totalThue = 0;
 
     items.forEach((item: LineFormValues, index: number) => {
-      if (linePreviews[index]) {
-        totalThanhTien += linePreviews[index].thanhTien;
-        totalThue += linePreviews[index].thanhTien * ((item?.thueSuat ?? 0) / 100);
+      const preview = linePreviews[index];
+      if (preview) {
+        // Tính lại tổng dòng dựa trên giá trị Giá tôn thực tế trong form (có thể đã bị ghi đè)
+        const currentThanhTienTon = item.thanhTienTon ?? preview.thanhTienTon;
+        const lineThanhTien = preview.thanhTien + (currentThanhTienTon - preview.thanhTienTon);
+        totalThanhTien += lineThanhTien;
+        totalThue += lineThanhTien * ((item?.thueSuat ?? 0) / 100);
       }
     });
 
@@ -326,9 +351,16 @@ export default function OrderFormPage() {
   };
 
   const isRowIncomplete = (item: any) => {
-    const nhom = nhomList.find((n) => n.id === item?.nhomSanPhamId);
+    const nhom = nhomList.find((n) => n.id === Number(item?.nhomSanPhamId));
     if (!hasAnyLineInput(item)) return false;
-    return !item?.tenSanPham || !item?.nhomSanPhamId || !item?.loaiTonId || !item?.w || item.w <= 0 || !item?.h || item.h <= 0 || !item?.soLuong || item.soLuong <= 0 || !hasAllDimensions(item, nhom);
+    
+    return (
+      !item?.tenSanPham || 
+      !item?.nhomSanPhamId || 
+      !item?.loaiTonId || 
+      !item?.soLuong || item.soLuong <= 0 || 
+      !hasAllDimensions(item, nhom)
+    );
   };
 
   /**
@@ -352,7 +384,7 @@ export default function OrderFormPage() {
       const items = allValues.lineInputs || [];
       const last = items[items.length - 1];
       if (last && last.nhomSanPhamId) {
-        const found = nhomList.find((n) => n.id === last.nhomSanPhamId);
+        const found = nhomList.find((n) => n.id === Number(last.nhomSanPhamId));
         setSelectedNhomRow(found);
       } else {
         setSelectedNhomRow(undefined);
@@ -372,13 +404,17 @@ export default function OrderFormPage() {
     const partialLines = allLineInputs.filter((l) => {
       if (!hasAnyLineInput(l)) return false;
       const nhom = nhomList.find((n) => n.id === l?.nhomSanPhamId);
-      return !l || !l.nhomSanPhamId || !l.loaiTonId || !l.w || l.w <= 0 || !l.h || l.h <= 0 || !l.soLuong || l.soLuong <= 0 || !hasAllDimensions(l, nhom);
+      return isRowIncomplete(l);
     });
     if (partialLines.length > 0) {
       message.warning('Nhập đủ kích thước (mm) cho từng dòng trước khi tính công thức');
       return;
     }
-    const filtered = allLineInputs.filter((l) => l && l.nhomSanPhamId && l.loaiTonId && l.w > 0 && l.h > 0 && l.soLuong > 0);
+    const filtered = allLineInputs.filter((l) => {
+      const nhom = nhomList.find((n) => n.id === l?.nhomSanPhamId);
+      return l && l.nhomSanPhamId && l.loaiTonId && l.soLuong > 0 && hasAllDimensions(l, nhom);
+    });
+
     if (filtered.length === 0) {
       message.warning('Thêm ít nhất một cụm sản phẩm');
       return;
@@ -404,6 +440,7 @@ export default function OrderFormPage() {
           loaiTonId: l.loaiTonId,
           w: l.w,
           h: l.h,
+          thanhTienTon: l.thanhTienTon,
           thamSoNhap: l.thamSoNhap,
           soLuong: l.soLuong,
           giaNhanCong: l.giaNhanCong,
@@ -448,6 +485,7 @@ export default function OrderFormPage() {
                   title: 'STT',
                   dataIndex: 'stt',
                   width: 40,
+                  align: 'center' as const,
                   render: (_: any, __: any, idx: number) => idx + 1,
                 },
                 {
@@ -455,27 +493,33 @@ export default function OrderFormPage() {
                   dataIndex: 'sanPham',
                   width: 260,
                   render: (_: any, field: any) => (
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }] }>
-                        <Select placeholder="Loại sản phẩm" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'tenSanPham']} noStyle rules={[{ required: true, message: 'Nhập tên sản phẩm' }]}>
-                        <Input placeholder="Tên sản phẩm" />
-                      </Form.Item>
+                    <div className="price-fields-stack">
+                      <div className="price-field-row">
+                        <span className="price-field-label">Loại sản phẩm</span>
+                        <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}>
+                          <Select placeholder="Chọn loại" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
+                        </Form.Item>
+                      </div>
+                      <div className="price-field-row">
+                        <span className="price-field-label">Tên sản phẩm</span>
+                        <Form.Item name={[field.name, 'tenSanPham']} noStyle rules={[{ required: true, message: 'Nhập tên sản phẩm' }]}>
+                          <Input placeholder="Nhập tên" />
+                        </Form.Item>
+                      </div>
                     </div>
                   ),
                 },
                 {
                   title: 'Kích thước (mm)',
                   dataIndex: 'kichThuoc',
-                  width: 360,
+                  width: 293,
                   render: (_: any, field: any) => {
                     const nhomId = form.getFieldValue(['lineInputs', field.name, 'nhomSanPhamId']);
                     const nhom = nhomList.find((n) => n.id === nhomId);
                     const dimensionFields = getDimensionFields(nhom);
 
                     return (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(92px, 1fr))', gap: 6 }}>
+                      <div className="dimension-fields-grid">
                         {dimensionFields.map((dimension) => {
                           const name = dimension.target === 'thamSoNhap'
                             ? [field.name, 'thamSoNhap', dimension.paramKey ?? dimension.key]
@@ -489,10 +533,12 @@ export default function OrderFormPage() {
                               rules={[{ required: true, message: `Nhập ${dimension.label}` }]}
                             >
                               <InputNumber
+                                className="dimension-field-input"
                                 min={dimension.key === 'phan_manh' ? 1 : 0}
                                 step={dimension.key === 'phan_manh' ? 1 : 10}
                                 placeholder={dimension.label}
                                 addonBefore={dimension.label}
+                                controls={false}
                                 style={{ width: '100%' }}
                               />
                             </Form.Item>
@@ -503,144 +549,181 @@ export default function OrderFormPage() {
                   },
                 },
                 {
-                  title: <>
-                    Xuất xứ/<br />Độ dày tôn
-                  </>,
-                  dataIndex: 'loaiTonId',
-                  width: 200,
-                  render: (_: any, field: any) => (
-                      <Form.Item name={[field.name, 'loaiTonId']} noStyle rules={requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }] }>
-                      <Select placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: <>
-                    ∑Ssx(m2)  
-                  </>,
-                  dataIndex: 'dienTichSx1Cai',
-                  width: 120,
+                  title: 'Thông tin tôn',
+                  dataIndex: 'loaiTonTrongLuong',
+                  width: 150,
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
-                    return preview ? formatArea(preview.dienTichSx1Cai) : '-';
+                    return (
+                      <div className="price-fields-stack">
+                        <div className="price-field-row">
+                          <span className="price-field-label">Loại tôn</span>
+                          <Form.Item
+                            name={[field.name, 'loaiTonId']}
+                            noStyle
+                            rules={requiredRulesFor('Loại tôn') ?? requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }]}
+                          >
+                            <Select placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
+                          </Form.Item>
+                        </div>
+                        <div className="price-field-row">
+                          <span className="price-field-label">Trọng lượng (Kg)</span>
+                          <span className="display-value">{preview ? preview.trongLuongKg.toFixed(2) : '-'}</span>
+                        </div>
+                      </div>
+                    );
                   },
                 },
                 {
-                  title: <>
-                    ∑Ssx(mét tới)
-                  </>,
-                  dataIndex: 'tongDienTichLo',
-                  width: 140,
+                  title: 'Diện tích Sx',
+                  dataIndex: 'dienTichSx',
+                  width: 150,
+                  align: 'center' as const,
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
-                    return preview ? formatArea(preview.dienTichSanXuatMetToi) : '-';
+                    if (!preview) return '-';
+                    return (
+                      <div className="price-fields-stack">
+                        <div className="price-field-row">
+                          <span className="price-field-label">∑Ssx (m²)</span>
+                          <span className="display-value">{formatArea(preview.dienTichSx1Cai)}</span>
+                        </div>
+                        <div className="price-field-row">
+                          <span className="price-field-label">∑Ssx (mét tới)</span>
+                          <span className="display-value">{formatArea(preview.dienTichSanXuatMetToi)}</span>
+                        </div>
+                      </div>
+                    );
                   },
                 },
                 {
-                  title: <>
-                    Trọng lượng(Kg)
-                  </>,
-                  dataIndex: 'trongLuongKg',
-                  width: 100,
+                  title: 'Chi phí (VNĐ)',
+                  dataIndex: 'giaTri',
+                  width: 150,
+                  render: (_: any, field: any) => (
+                    <div className="price-fields-stack">
+                      <div className="price-field-row">
+                        <span className="price-field-label">Giá tôn (VNĐ)</span>
+                        <Form.Item name={[field.name, 'thanhTienTon']} noStyle>
+                          <InputNumber min={0} step={1000} controls={false} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                      <div className="price-field-row">
+                        <span className="price-field-label">Giá nhân công (VNĐ)</span>
+                        <Form.Item
+                          name={[field.name, 'giaNhanCong']}
+                          noStyle
+                          rules={requiredRulesFor('Giá nhân công (VNĐ)') ? [{ required: true, message: 'Nhập giá nhân công' }] : undefined}
+                        >
+                          <InputNumber min={0} controls={false} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                      <div className="price-field-row">
+                        <span className="price-field-label">Phụ kiện đi kèm (VNĐ)</span>
+                        <Form.Item
+                          name={[field.name, 'phuKien']}
+                          noStyle
+                          rules={requiredRulesFor('Phụ kiện đi kèm (VNĐ)') ? [{ required: true, message: 'Nhập phụ kiện' }] : undefined}
+                        >
+                          <InputNumber min={0} controls={false} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Thông tin dòng',
+                  dataIndex: 'donViSoLuongThue',
+                  width: 150,
+                  render: (_: any, field: any) => (
+                    <div className="price-fields-stack">
+                      <div className="price-field-row">
+                        <span className="price-field-label">Đơn vị tính</span>
+                        <Form.Item name={[field.name, 'donViTinh']} noStyle rules={requiredRulesFor('Đơn vị tính') ?? [{ required: true, message: 'Nhập đơn vị tính' }]}>
+                          <Input placeholder="cái" />
+                        </Form.Item>
+                      </div>
+                      <div className="price-field-row">
+                        <span className="price-field-label">Số lượng</span>
+                        <Form.Item name={[field.name, 'soLuong']} noStyle rules={requiredRulesFor('Số lượng') ?? [{ required: true, message: 'Nhập SL' }]}>
+                          <InputNumber min={1} controls={false} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                      <div className="price-field-row">
+                        <span className="price-field-label">Thuế suất</span>
+                        <Form.Item name={[field.name, 'thueSuat']} noStyle rules={requiredRulesFor('Thuế suất') ?? [{ required: true, message: 'Nhập thuế suất' }]}>
+                          <InputNumber min={0} max={100} step={1} controls={false} addonAfter="%" style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'Giá trị (VNĐ)',
+                  dataIndex: 'donGiaThanhTien',
+                  width: 130,
+                  align: 'center' as const,
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
-                    return preview ? preview.trongLuongKg.toFixed(2) : '-';
+                    if (!preview) return '-';
+                    const item = form.getFieldValue(['lineInputs', field.name]);
+                    const currentThanhTienTon = item?.thanhTienTon ?? preview.thanhTienTon;
+                    const adjustedTotal = preview.thanhTien + (currentThanhTienTon - preview.thanhTienTon);
+                    const soLuong = item?.soLuong || 1;
+                    return (
+                      <div className="price-fields-stack">
+                        <div className="price-field-row">
+                          <span className="price-field-label">Đơn giá (VND)</span>
+                          <span className="display-value">{formatMoney(adjustedTotal / soLuong)}</span>
+                        </div>
+                        <div className="price-field-row">
+                          <span className="price-field-label">Thành tiền (VND)</span>
+                          <span className="display-value">{formatMoney(adjustedTotal)}</span>
+                        </div>
+                      </div>
+                    );
                   },
                 },
                 {
-                  title: <>
-                    Giá tôn<br/>(VNĐ)
-                  </>,
-                  dataIndex: 'thanhTienTon',
-                  width: 140,
+                  title: 'Ghi chú & hình ảnh',
+                  dataIndex: 'ghiChuHinhAnh',
+                  width: 180,
                   render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    return preview ? formatMoney(preview.thanhTienTon) : '-';
+                    const nhomId = lineInputs?.[field.name]?.nhomSanPhamId
+                      ?? form.getFieldValue(['lineInputs', field.name, 'nhomSanPhamId']);
+                    const nhom = nhomList.find((n) => n.id === Number(nhomId));
+                    const imageUrl = resolveMasterImageUrl(nhom?.hinhAnhMinhHoa);
+
+                    return (
+                      <div className="price-fields-stack">
+                        <div className="price-field-row">
+                          <span className="price-field-label">Ghi chú</span>
+                          <Form.Item
+                            name={[field.name, 'ghiChu']}
+                            noStyle
+                            rules={
+                              requiredRulesFor('Ghi chú')
+                              ?? (requiredRulesFor('Ghi chú/ hình ảnh') ? [{ required: true, message: 'Nhập ghi chú' }] : undefined)
+                            }
+                          >
+                            <Input placeholder="Nhập ghi chú" />
+                          </Form.Item>
+                        </div>
+                        <div className="price-field-row">
+                          <span className="price-field-label">Hình ảnh</span>
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt={nhom?.tenNhom ?? 'Minh họa sản phẩm'}
+                              className="product-master-image"
+                            />
+                          ) : (
+                            <span className="display-value">-</span>
+                          )}
+                        </div>
+                      </div>
+                    );
                   },
-                },
-                {
-                  title: <>
-                    Giá nhân công(VNĐ)
-                  </>,
-                  dataIndex: 'giaNhanCong',
-                  width: 140,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'giaNhanCong']} noStyle rules={requiredRulesFor('Giá nhân công (VNĐ)') ? [{ required: true, message: 'Nhập giá nhân công' }] : undefined}>
-                      <InputNumber min={0} style={{ width: '100%' }} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Phụ kiện đi kèm (VNĐ)',
-                  dataIndex: 'phuKien',
-                  width: 140,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'phuKien']} noStyle rules={requiredRulesFor('Phụ kiện đi kèm (VNĐ)') ? [{ required: true, message: 'Nhập phụ kiện' }] : undefined}>
-                      <InputNumber min={0} style={{ width: '100%' }} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Đơn vị tính',
-                  dataIndex: 'donViTinh',
-                  width: 100,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'donViTinh']} noStyle rules={requiredRulesFor('Đơn vị tính') ?? [{ required: true, message: 'Nhập đơn vị tính' }]}>
-                      <Input placeholder="cái" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Số lượng',
-                  dataIndex: 'soLuong',
-                  width: 90,
-                  render: (_: any, field: any) => (
-                      <Form.Item name={[field.name, 'soLuong']} noStyle rules={requiredRulesFor('Số lượng') ?? [{ required: true, message: 'Nhập SL' }]}>
-                      <InputNumber min={1} style={{ width: '100%' }} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Thuế suất',
-                  dataIndex: 'thueSuatRow',
-                  width: 100,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'thueSuat']} noStyle rules={requiredRulesFor('Thuế suất') ?? [{ required: true, message: 'Nhập thuế suất' }]}>
-                      <InputNumber min={0} max={100} step={1} addonAfter="%" style={{ width: '100%' }} />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: <>
-                    Đơn giá(VND)
-                  </>,
-                  dataIndex: 'donGiaCuoi',
-                  width: 120,
-                  render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    return preview ? formatMoney(preview.donGiaCuoi) : '-';
-                  },
-                },
-                {
-                  title: <>
-                    Thành tiền(VND)
-                  </>,
-                  dataIndex: 'thanhTien',
-                  width: 140,
-                  render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    return preview ? formatMoney(preview.thanhTien) : '-';
-                  },
-                },
-                {
-                  title: 'Ghi chú/ hình ảnh',
-                  dataIndex: 'ghiChu',
-                  width: 220,
-                  render: (_: any, field: any) => (
-                    <Form.Item name={[field.name, 'ghiChu']} noStyle rules={requiredRulesFor('Ghi chú/ hình ảnh') ? [{ required: true, message: 'Nhập ghi chú' }] : undefined}>
-                      <Input placeholder="Ghi chú" />
-                    </Form.Item>
-                  ),
                 },
                 {
                   title: 'Xóa',
@@ -663,7 +746,7 @@ export default function OrderFormPage() {
                     dataSource={fields}
                     columns={columns}
                     pagination={false}
-                    scroll={{ x: 1400 }}
+                    scroll={{ x: 873 }}
                     locale={{ emptyText: 'Chưa có dòng sản phẩm' }}
                     rowClassName={(_, __, index) => {
                       const item = items[index];
@@ -697,12 +780,70 @@ export default function OrderFormPage() {
                       </div>
                     )}
                   />
-                  {fields.length === 0 && (
-                    <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ ...defaultLineValues })} style={{ marginTop: 16, width: '100%' }}>
-                      Thêm dòng mới
-                    </Button>
-                  )}
+                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(nhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
+                    Thêm dòng mới
+                  </Button>
                   <style>{`
+                    .price-fields-stack {
+                      display: grid;
+                      gap: 10px;
+                      min-width: 140px;
+                    }
+                    .price-field-row {
+                      display: grid;
+                      gap: 4px;
+                    }
+                    .price-field-label {
+                      font-size: 12px;
+                      font-weight: 600;
+                      color: rgba(0, 0, 0, 0.65);
+                      line-height: 1.3;
+                    }
+                    .product-master-image {
+                      display: block;
+                      width: 100%;
+                      max-width: 140px;
+                      max-height: 100px;
+                      margin-inline: auto;
+                      object-fit: contain;
+                      border: 1px solid #f0f0f0;
+                      border-radius: 4px;
+                      background: #fafafa;
+                    }
+                    .display-value,
+                    .display-value-stack {
+                      text-align: center;
+                    }
+                    .display-value {
+                      display: block;
+                      line-height: 1.3;
+                    }
+                    .display-value-stack {
+                      display: grid;
+                      gap: 4px;
+                      line-height: 1.3;
+                    }
+                    .dimension-fields-grid {
+                      display: grid;
+                      grid-template-columns: repeat(2, minmax(103px, 1fr));
+                      gap: 8px;
+                    }
+                    .dimension-field-input.ant-input-number-group,
+                    .dimension-field-input.ant-input-number-group-wrapper {
+                      width: 100%;
+                    }
+                    .dimension-field-input .ant-input-number-group-addon {
+                      padding-inline: 6px;
+                      flex-shrink: 0;
+                    }
+                    .dimension-field-input .ant-input-number {
+                      flex: 1 1 auto;
+                      min-width: 0;
+                    }
+                    .dimension-field-input .ant-input-number-input {
+                      min-width: 3.5ch;
+                      padding-inline: 8px;
+                    }
                     .error-row {
                       background-color: #fff2f0 !important;
                     }
@@ -722,7 +863,7 @@ export default function OrderFormPage() {
           </Form.List>
           {selectedNhomRow && (
             <Text type="secondary">
-              Hằng số: {selectedNhomRow.thamSoCoDinhs.map((t) => `${t.tenThamSo}=${t.giaTriSo}`).join(' | ')}
+              Kích thước tiêu chuẩn: {selectedNhomRow.thamSoCoDinhs.map((t) => `${t.tenThamSo}=${t.giaTriSo}`).join(' | ')}
             </Text>
           )}
           {preview && (

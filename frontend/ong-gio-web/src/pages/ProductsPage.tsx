@@ -58,7 +58,7 @@ export default function ProductsPage() {
         columns={[
           { title: 'Tên nhóm', dataIndex: 'tenNhom' },
           {
-            title: 'Hằng số kỹ thuật',
+            title: 'Kích thước tiêu chuẩn',
             dataIndex: 'thamSoCoDinhs',
             render: (ts: ThamSoCoDinh[]) => ts?.map((t) => `${t.tenThamSo}=${t.giaTriSo}`).join(', '),
           },
@@ -108,7 +108,7 @@ export default function ProductsPage() {
                   </Space>
                 ))}
                 <Button type="dashed" onClick={() => add()} block>
-                  + Thêm hằng số
+                  + Thêm kích thước tiêu chuẩn
                 </Button>
               </>
             )}
