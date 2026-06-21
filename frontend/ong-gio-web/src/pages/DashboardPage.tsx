@@ -23,9 +23,9 @@ export default function DashboardPage() {
         <Button type="primary" onClick={() => navigate('/don-hang/tao-moi')}>
           + Tạo đơn hàng
         </Button>
-        <Button onClick={() => navigate('/nguyen-lieu')}>+ Thêm nguyên liệu</Button>
-        <Button onClick={() => navigate('/san-pham')}>+ Thêm sản phẩm</Button>
-        <Button onClick={() => navigate('/nguoi-dung')}>+ Thêm user</Button>
+        <Button onClick={() => navigate('/nguyen-lieu', { state: { openCreate: true } })}>+ Thêm nguyên liệu</Button>
+        <Button onClick={() => navigate('/san-pham', { state: { openCreate: true } })}>+ Thêm sản phẩm</Button>
+        <Button onClick={() => navigate('/nguoi-dung', { state: { openCreate: true } })}>+ Thêm user</Button>
       </Space>
 
       <Row gutter={[16, 16]}>

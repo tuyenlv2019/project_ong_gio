@@ -1,0 +1,87 @@
+.brand-sider {
+  background: linear-gradient(180deg, #003d82 0%, #0056b3 55%, #0068c9 100%) !important;
+  box-shadow: 2px 0 12px rgba(0, 61, 130, 0.25);
+}
+
+.brand-logo-wrap {
+  margin: 12px;
+  padding: 12px 10px;
+  background: #fff;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.brand-logo {
+  width: 100%;
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.brand-sidebar-menu.ant-menu-dark {
+  background: transparent;
+  border-inline-end: none;
+  padding: 0 8px 16px;
+}
+
+.brand-sidebar-menu.ant-menu-dark .ant-menu-item {
+  margin: 4px 0;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.88);
+  transition: background 0.2s, color 0.2s;
+}
+
+.brand-sidebar-menu.ant-menu-dark .ant-menu-item .anticon {
+  color: #7ddfff;
+}
+
+.brand-sidebar-menu.ant-menu-dark .ant-menu-item:hover {
+  background: rgba(0, 194, 255, 0.18) !important;
+  color: #fff;
+}
+
+.brand-sidebar-menu.ant-menu-dark .ant-menu-item-selected {
+  background: linear-gradient(90deg, rgba(0, 194, 255, 0.35) 0%, rgba(77, 208, 225, 0.2) 100%) !important;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 #00c2ff;
+}
+
+.brand-sidebar-menu.ant-menu-dark .ant-menu-item-selected .anticon {
+  color: #00e5ff;
+}
+
+.brand-header {
+  background: #fff !important;
+  padding: 0 24px !important;
+  border-bottom: 2px solid #00c2ff !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 86, 179, 0.08);
+}
+
+.brand-header-title {
+  margin: 0 !important;
+  color: #0056b3 !important;
+  font-weight: 600 !important;
+}
+
+.brand-header-user {
+  color: #0056b3;
+}
+
+.brand-header-user strong {
+  color: #003d82;
+}
+
+.brand-header .ant-btn-text {
+  color: #0056b3;
+}
+
+.brand-header .ant-btn-text:hover {
+  color: #00c2ff !important;
+  background: rgba(0, 194, 255, 0.1) !important;
+}

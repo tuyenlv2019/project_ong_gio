@@ -7,6 +7,7 @@ export interface ThamSoCoDinh {
   id?: number;
   tenThamSo: string;
   giaTriSo: number;
+  thuTu?: number;
 }
 
 export interface NhomSanPham {
@@ -30,6 +31,10 @@ export interface BaoGia {
   maBaoGia: string;
   tenKhachHang: string;
   ngayTao: string;
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
   thueSuat: number;
   tongTienTruocThue: number;
   tongTienSauThue: number;

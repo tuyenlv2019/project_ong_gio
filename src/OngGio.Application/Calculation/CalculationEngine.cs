@@ -174,16 +174,17 @@ public class CalculationEngine : ICalculationEngine
 
         var tongDienTichLo = ssx1Cai * request.SoLuong;
 
-        var thanhTienTon = tongDienTichLo * loaiTon.DonGiaM2;
+        var thanhTienTon = Math.Round(tongDienTichLo * loaiTon.DonGiaM2, 0, MidpointRounding.AwayFromZero);
 
         var trongLuongKg = dienTichSanXuatMetToi * loaiTon.KgMoiMetToi;
 
         var thanhTienNhanCongPhuKien = (request.GiaNhanCong + request.PhuKien) * request.SoLuong;
 
         var donGiaCuoi = request.SoLuong > 0
-
-            ? (thanhTienTon + thanhTienNhanCongPhuKien) / request.SoLuong
-
+            ? Math.Round(
+                (thanhTienTon + thanhTienNhanCongPhuKien) / request.SoLuong,
+                0,
+                MidpointRounding.AwayFromZero)
             : 0m;
 
         var thanhTien = donGiaCuoi * request.SoLuong;

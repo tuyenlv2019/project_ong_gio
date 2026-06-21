@@ -16,6 +16,29 @@ import {
 } from '../api';
 import type { BaoGia } from '../types';
 
+function formatDateTime(value?: string) {
+  if (!value) return '—';
+  const parsed = dayjs(value);
+  if (!parsed.isValid() || parsed.year() <= 1) return '—';
+  return parsed.format('DD/MM/YYYY HH:mm');
+}
+
+function getCreatedAt(row: BaoGia) {
+  return formatDateTime(row.createdAt || row.ngayTao);
+}
+
+function getUpdatedAt(row: BaoGia) {
+  return formatDateTime(row.updatedAt);
+}
+
+function getCreatedBy(row: BaoGia) {
+  return row.createdBy?.trim() || '—';
+}
+
+function getUpdatedBy(row: BaoGia) {
+  return row.updatedBy?.trim() || '—';
+}
+
 export default function OrdersPage() {
   const [data, setData] = useState<BaoGia[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,35 +82,54 @@ export default function OrdersPage() {
         rowKey="id"
         loading={loading}
         dataSource={data}
+        scroll={{ x: 1420 }}
         columns={[
-          { title: 'Mã BG', dataIndex: 'maBaoGia', width: 120 },
-          { title: 'Khách hàng', dataIndex: 'tenKhachHang' },
+          { title: 'Mã BG', dataIndex: 'maBaoGia', width: 120, fixed: 'left' as const },
+          { title: 'Khách hàng', dataIndex: 'tenKhachHang', width: 160 },
           {
-            title: 'Ngày tạo',
-            dataIndex: 'ngayTao',
-            render: (v: string) => dayjs(v).format('DD/MM/YYYY HH:mm'),
+            title: 'Ngày giờ tạo',
+            width: 150,
+            render: (_: unknown, row: BaoGia) => getCreatedAt(row),
+          },
+          {
+            title: 'Người tạo',
+            width: 140,
+            render: (_: unknown, row: BaoGia) => getCreatedBy(row),
           },
           {
             title: 'Trạng thái',
             dataIndex: 'trangThai',
+            width: 170,
             render: (v: string, row) => (
               <Select
                 size="small"
-                value={v || 'DANG_XU_LY'}
-                style={{ width: 140 }}
+                value={v || 'CHUA_XU_LY'}
+                style={{ width: 160 }}
                 options={Object.entries(TRANG_THAI_DON).map(([k, o]) => ({ value: k, label: o.label }))}
                 onChange={(val) => onStatusChange(row.id, val)}
               />
             ),
           },
           {
+            title: 'Người cập nhật',
+            width: 140,
+            render: (_: unknown, row: BaoGia) => getUpdatedBy(row),
+          },
+          {
+            title: 'Cập nhật lúc',
+            width: 150,
+            render: (_: unknown, row: BaoGia) => getUpdatedAt(row),
+          },
+          {
             title: 'Tổng tiền',
             dataIndex: 'tongTienSauThue',
+            width: 140,
             render: (v: number) => `${formatMoney(v)} đ`,
           },
           {
             title: 'Thao tác',
             width: 200,
+            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />

@@ -12,6 +12,7 @@ import {
 import { Layout, Menu, Typography, Button, Space, Dropdown } from 'antd';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../authService';
+import './MainLayout.css';
 
 const { Header, Sider, Content } = Layout;
 
@@ -48,35 +49,31 @@ export default function MainLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider breakpoint="lg" collapsedWidth={0} theme="dark">
-        <div style={{ padding: '16px 24px', color: '#fff', fontWeight: 700, fontSize: 16 }}>
-          Ống Gió 2026
+      <Sider breakpoint="lg" collapsedWidth={0} theme="dark" className="brand-sider" width={240}>
+        <div className="brand-logo-wrap">
+          <img src="/logo-cty.png" alt="THUAN PHONG M&E Co.Ltd" className="brand-logo" />
         </div>
         <Menu
           theme="dark"
           mode="inline"
+          className="brand-sidebar-menu"
           selectedKeys={[location.pathname === '/' ? '/' : location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>
       <Layout>
-        <Header style={{ 
-          background: '#fff', 
-          padding: '0 24px', 
-          borderBottom: '1px solid #f0f0f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+        <Header className="brand-header">
+          <Typography.Title level={4} className="brand-header-title">
             Hệ thống Báo giá & Quản lý Sản xuất Ống gió
           </Typography.Title>
           {user && (
-            <Space>
-              <span>Xin chào: <strong>{user.hoTen}</strong></span>
-              <Dropdown menu={{ items: userMenu }} placement="bottomRight">
-                <Button type="text" icon={<UserOutlined />} />
+            <Space className="brand-header-user">
+              <span>
+                Xin chào: <strong>{user.hoTen}</strong>
+              </span>
+              <Dropdown menu={{ items: userMenu }} placement="bottomRight" trigger={['click']}>
+                <Button type="text" icon={<UserOutlined />} aria-label="Tài khoản" />
               </Dropdown>
             </Space>
           )}

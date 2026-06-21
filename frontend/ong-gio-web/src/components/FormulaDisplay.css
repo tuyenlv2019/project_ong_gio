@@ -1,0 +1,33 @@
+.formula-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #262626;
+}
+
+.formula-display--block {
+  margin: 0;
+  padding: 10px 12px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.formula-display--inline {
+  padding: 0;
+}
+
+.formula-display-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.formula-display-line + .formula-display-line {
+  margin-top: 4px;
+}
+
+.formula-display-empty {
+  color: rgba(0, 0, 0, 0.45);
+}

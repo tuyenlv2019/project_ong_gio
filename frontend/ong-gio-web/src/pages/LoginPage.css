@@ -1,0 +1,74 @@
+.login-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #003d82 0%, #0056b3 45%, #0068c9 100%);
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 35, 80, 0.28) !important;
+  border: none !important;
+}
+
+.login-card .ant-card-body {
+  padding: 28px 32px 32px !important;
+}
+
+.login-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 86, 179, 0.12);
+}
+
+.login-logo {
+  width: 100%;
+  max-height: 80px;
+  object-fit: contain;
+}
+
+.login-title {
+  margin: 0 0 24px !important;
+  text-align: center;
+  color: #0056b3 !important;
+  font-weight: 600 !important;
+}
+
+.login-card .ant-btn-primary {
+  background: #0056b3;
+  border-color: #0056b3;
+  box-shadow: 0 2px 8px rgba(0, 86, 179, 0.35);
+}
+
+.login-card .ant-btn-primary:hover {
+  background: #0068c9 !important;
+  border-color: #00c2ff !important;
+}
+
+.login-card .ant-input-affix-wrapper:focus,
+.login-card .ant-input-affix-wrapper-focused,
+.login-card .ant-input:focus {
+  border-color: #00c2ff;
+  box-shadow: 0 0 0 2px rgba(0, 194, 255, 0.15);
+}
+
+.login-card .ant-form-item-label > label {
+  color: #003d82;
+  font-weight: 500;
+}
+
+.login-card .ant-btn-link {
+  color: #0056b3;
+}
+
+.login-card .ant-btn-link:hover {
+  color: #00c2ff;
+}

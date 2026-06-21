@@ -4,8 +4,13 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { createLoaiTon, deleteLoaiTon, formatMoney, getLoaiTons, updateLoaiTon } from '../api';
+import { createLoaiTon, deleteLoaiTon, formatMoney, getLoaiTons, moneyInputNumberProps, updateLoaiTon } from '../api';
+import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { LoaiTon } from '../types';
+
+function formatKgMetToi(value: number) {
+  return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value)} kg/1mét tới`;
+}
 
 export default function MaterialsPage() {
   const [data, setData] = useState<LoaiTon[]>([]);
@@ -23,6 +28,8 @@ export default function MaterialsPage() {
     form.setFieldsValue(item ?? { thuongHieu: '', doDay: 0.58, donGiaM2: 185000, kgMoiMetToi: 4.5 });
     setOpen(true);
   };
+
+  useOpenCreateFromNavigation(() => openModal());
 
   const onSave = async () => {
     const values = await form.validateFields();
@@ -52,8 +59,12 @@ export default function MaterialsPage() {
         columns={[
           { title: 'Thương hiệu', dataIndex: 'thuongHieu' },
           { title: 'Độ dày (mm)', dataIndex: 'doDay' },
-          { title: 'Đơn giá/m²', dataIndex: 'donGiaM2', render: (v) => formatMoney(v) },
-          { title: 'Kg/mét tới', dataIndex: 'kgMoiMetToi' },
+          { title: 'Đơn giá/m² (VND)', dataIndex: 'donGiaM2', render: (v) => `${formatMoney(v)} VND` },
+          {
+            title: 'Khối lượng (kg/1mét tới)',
+            dataIndex: 'kgMoiMetToi',
+            render: (v) => formatKgMetToi(v),
+          },
           {
             title: 'Thao tác',
             render: (_, row) => (
@@ -89,11 +100,16 @@ export default function MaterialsPage() {
           <Form.Item name="doDay" label="Độ dày (mm)" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} step={0.01} />
           </Form.Item>
-          <Form.Item name="donGiaM2" label="Đơn giá/m²" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} />
+          <Form.Item name="donGiaM2" label="Đơn giá/m² (VND)" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} min={0} precision={0} addonAfter="VND" {...moneyInputNumberProps} />
           </Form.Item>
-          <Form.Item name="kgMoiMetToi" label="1 mét tới = bao nhiêu kg" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} min={0} step={0.01} />
+          <Form.Item
+            name="kgMoiMetToi"
+            label="Khối lượng (kg/1mét tới)"
+            tooltip="Số kg tôn tương ứng với 1 mét tới (chiều dài triển khai tôn)"
+            rules={[{ required: true }]}
+          >
+            <InputNumber style={{ width: '100%' }} min={0} step={0.01} addonAfter="kg/1mét tới" />
           </Form.Item>
         </Form>
       </Modal>

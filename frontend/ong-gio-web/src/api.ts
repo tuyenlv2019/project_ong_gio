@@ -12,8 +12,17 @@ import type {
   NguoiDung,
   NhomSanPham,
 } from './types';
+import { sortOrderedThamSoCoDinhs } from './utils/productFormParams';
 
 const api = axios.create({ baseURL: API_BASE });
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 /**
  * Lấy thống kê dashboard từ backend.
@@ -30,7 +39,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
  */
 export async function getNhomSanPhams(): Promise<NhomSanPham[]> {
   const { data } = await api.get<NhomSanPham[]>('/api/nhom-san-pham');
-  return data;
+  return data.map((nhom) => ({
+    ...nhom,
+    thamSoCoDinhs: sortOrderedThamSoCoDinhs(nhom.thamSoCoDinhs ?? []),
+  }));
 }
 
 /**
@@ -135,6 +147,7 @@ export async function getBaoGia(id: number): Promise<BaoGia> {
 export async function createBaoGia(payload: {
   tenKhachHang: string;
   thueSuat: number;
+  trangThai?: string;
   lines: CalculationRequest[];
 }) {
   const { data } = await api.post('/api/bao-gia', payload);
@@ -149,7 +162,7 @@ export async function createBaoGia(payload: {
  */
 export async function updateBaoGia(
   id: number,
-  payload: { tenKhachHang: string; thueSuat: number; lines: CalculationRequest[] },
+  payload: { tenKhachHang: string; thueSuat: number; trangThai?: string; lines: CalculationRequest[] },
 ) {
   const { data } = await api.put(`/api/bao-gia/${id}`, payload);
   return data;
@@ -241,15 +254,40 @@ export async function deleteNguoiDung(id: number) {
 }
 
 /**
- * Định dạng số tiền theo locale Việt Nam.
+ * Định dạng số tiền — làm tròn số nguyên, ngăn cách hàng nghìn bằng dấu phẩy.
  * @param value Giá trị cần định dạng.
  * @returns Chuỗi tiền tệ đã làm tròn.
  */
 export function formatMoney(value: number) {
-  return new Intl.NumberFormat('vi-VN').format(Math.round(value));
+  return Math.round(Number(value) || 0).toLocaleString('en-US');
 }
 
+/** Hiển thị số trong ô nhập tiền (1,234,567). */
+export function formatMoneyInput(value: number | string | undefined) {
+  if (value === undefined || value === null || value === '') return '';
+  const digits = `${value}`.replace(/[^\d-]/g, '');
+  if (!digits || digits === '-') return digits;
+  const negative = digits.startsWith('-');
+  const normalized = negative ? digits.slice(1) : digits;
+  const formatted = normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return negative ? `-${formatted}` : formatted;
+}
+
+/** Parse chuỗi tiền từ ô nhập về số. */
+export function parseMoneyInput(value: string | undefined) {
+  const parsed = Number(value?.replace(/,/g, '') ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const moneyInputNumberProps = {
+  formatter: (value: number | string | undefined) => formatMoneyInput(value),
+  parser: (value: string | undefined) => parseMoneyInput(value),
+} as const;
+
+export { moneyInputNumberProps };
+
 export const TRANG_THAI_DON: Record<string, { label: string; color: string }> = {
+  CHUA_XU_LY: { label: 'Chưa xử lý', color: 'default' },
   DANG_XU_LY: { label: 'Đang xử lý', color: 'processing' },
-  HOAN_THANH: { label: 'Hoàn thành', color: 'success' },
+  HOAN_THANH: { label: 'Hoàn Thành', color: 'success' },
 };

@@ -49,7 +49,7 @@ public class BaoGiaService : IBaoGiaService
             TenKhachHang = request.TenKhachHang,
             NgayTao = DateTime.UtcNow,
             ThueSuat = request.ThueSuat,
-            TrangThai = "DANG_XU_LY"
+            TrangThai = NormalizeTrangThai(request.TrangThai)
         };
 
         await ApplyLinesAsync(baoGia, request, ct);
@@ -74,10 +74,12 @@ public class BaoGiaService : IBaoGiaService
 
         baoGia.TenKhachHang = request.TenKhachHang;
         baoGia.ThueSuat = request.ThueSuat;
+        baoGia.TrangThai = NormalizeTrangThai(request.TrangThai);
         _db.ChiTietBaoGias.RemoveRange(baoGia.ChiTietBaoGias);
         baoGia.ChiTietBaoGias.Clear();
 
         await ApplyLinesAsync(baoGia, request, ct);
+        _db.Entry(baoGia).State = EntityState.Modified;
         await _db.SaveChangesAsync(ct);
         return baoGia;
     }
@@ -113,7 +115,8 @@ public class BaoGiaService : IBaoGiaService
         var baoGia = await _db.BaoGias.FindAsync([id], ct);
         if (baoGia is null) return null;
 
-        baoGia.TrangThai = trangThai;
+        baoGia.TrangThai = NormalizeTrangThai(trangThai);
+        _db.Entry(baoGia).State = EntityState.Modified;
         await _db.SaveChangesAsync(ct);
         return baoGia;
     }
@@ -233,8 +236,14 @@ public class BaoGiaService : IBaoGiaService
             var result = await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, calcRequest, ct);
 
             // Ưu tiên sử dụng Giá tôn do người dùng nhập, nếu không có mới dùng kết quả tính toán tự động
-            var finalThanhTienTon = line.ThanhTienTon > 0 ? line.ThanhTienTon : result.ThanhTienTon;
-            var finalThanhTien = result.ThanhTien + (finalThanhTienTon - result.ThanhTienTon);
+            var finalThanhTienTon = line.ThanhTienTon > 0
+                ? Math.Round(line.ThanhTienTon, 0, MidpointRounding.AwayFromZero)
+                : result.ThanhTienTon;
+            var adjustedThanhTien = result.ThanhTien + (finalThanhTienTon - result.ThanhTienTon);
+            var donGiaCuoi = line.SoLuong > 0
+                ? Math.Round(adjustedThanhTien / line.SoLuong, 0, MidpointRounding.AwayFromZero)
+                : 0m;
+            var finalThanhTien = donGiaCuoi * line.SoLuong;
 
             baoGia.ChiTietBaoGias.Add(new ChiTietBaoGia
             {
@@ -255,7 +264,7 @@ public class BaoGiaService : IBaoGiaService
                 TongDienTichLo = result.TongDienTichLo,
                 TrongLuongKg = result.TrongLuongKg,
                 ThanhTienTon = finalThanhTienTon,
-                DonGiaCuoi = line.SoLuong > 0 ? finalThanhTien / line.SoLuong : 0,
+                DonGiaCuoi = donGiaCuoi,
                 ThanhTien = finalThanhTien,
                 TrangThaiCongThuc = result.TrangThaiCongThuc
             });
@@ -275,7 +284,10 @@ public class BaoGiaService : IBaoGiaService
             ?? throw new KeyNotFoundException($"Khong tim thay nhom san pham id={nhomSanPhamId}");
         var loaiTon = await _db.LoaiTons.FirstOrDefaultAsync(x => x.Id == loaiTonId, ct)
             ?? throw new KeyNotFoundException($"Khong tim thay loai ton id={loaiTonId}");
-        var thamSo = await _db.ThamSoCoDinhs.Where(x => x.NhomSanPhamId == nhomSanPhamId).ToListAsync(ct);
+        var thamSo = await _db.ThamSoCoDinhs
+            .Where(x => x.NhomSanPhamId == nhomSanPhamId)
+            .OrderBy(x => x.ThuTu)
+            .ToListAsync(ct);
         return (nhom, loaiTon, thamSo);
     }
 
@@ -295,6 +307,8 @@ public class BaoGiaService : IBaoGiaService
                 $"Nhóm sản phẩm '{nhom.TenNhom}' chưa cấu hình tham số nhập. Cập nhật tại Quản lý sản phẩm.");
         }
 
+        EnsureUniqueThamSo(nhom, thamSoList);
+
         if (string.IsNullOrWhiteSpace(nhom.CongThucDienTich))
         {
             throw new ArgumentException(
@@ -310,6 +324,34 @@ public class BaoGiaService : IBaoGiaService
             throw new ArgumentException(
                 $"Vui lòng nhập đủ kích thước (mm) trước khi tính công thức. Thiếu: {string.Join(", ", missing)}");
         }
+    }
+
+    private static void EnsureUniqueThamSo(NhomSanPham nhom, IReadOnlyList<ThamSoCoDinh> thamSoList)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in thamSoList)
+        {
+            var name = t.TenThamSo?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var bindingKey = GetThamSoBindingKey(name);
+            if (seen.TryGetValue(bindingKey, out var existing))
+            {
+                throw new ArgumentException(
+                    $"Nhóm sản phẩm '{nhom.TenNhom}': tham số '{name}' trùng với '{existing}' trên form đơn hàng. Cập nhật tại Quản lý sản phẩm.");
+            }
+
+            seen[bindingKey] = name;
+        }
+    }
+
+    private static string GetThamSoBindingKey(string tenThamSo)
+    {
+        var normalized = tenThamSo.Trim().ToLowerInvariant();
+        if (normalized is "w" or "wmax") return "w";
+        if (normalized is "h" or "hmax") return "h";
+        return $"thamSoNhap:{normalized}";
     }
 
     private static bool HasDimensionValue(CalculationRequest request, string key)
@@ -334,4 +376,11 @@ public class BaoGiaService : IBaoGiaService
         var count = await _db.BaoGias.CountAsync(x => x.NgayTao.Year == year, ct);
         return $"BG-{year}-{(count + 1):D3}";
     }
+
+    private static string NormalizeTrangThai(string? trangThai) =>
+        trangThai switch
+        {
+            "CHUA_XU_LY" or "DANG_XU_LY" or "HOAN_THANH" => trangThai,
+            _ => "CHUA_XU_LY"
+        };
 }

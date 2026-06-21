@@ -84,4 +84,5 @@ public record CreateBaoGiaLineRequest(
 public record CreateBaoGiaRequest(
     string TenKhachHang,
     decimal ThueSuat,
-    IReadOnlyList<CreateBaoGiaLineRequest> Lines);
+    IReadOnlyList<CreateBaoGiaLineRequest> Lines,
+    string TrangThai = "CHUA_XU_LY");

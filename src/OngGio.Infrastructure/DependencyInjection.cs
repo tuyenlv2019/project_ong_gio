@@ -16,6 +16,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddMemoryCache();
+        services.AddHttpContextAccessor();
         services.AddScoped<ICaptchaService, CaptchaService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBaoGiaService, BaoGiaService>();
@@ -113,8 +114,9 @@ public static class DependencyInjection
             foreach (var obsolete in nhom.ThamSoCoDinhs.Where(x => !desiredParams.Contains(x.TenThamSo)).ToList())
                 nhom.ThamSoCoDinhs.Remove(obsolete);
 
-            foreach (var ten in thamSoForm)
+            for (var i = 0; i < thamSoForm.Length; i++)
             {
+                var ten = thamSoForm[i];
                 var existingParam = nhom.ThamSoCoDinhs
                     .FirstOrDefault(x => string.Equals(x.TenThamSo, ten, StringComparison.OrdinalIgnoreCase));
 
@@ -123,13 +125,15 @@ public static class DependencyInjection
                     nhom.ThamSoCoDinhs.Add(new ThamSoCoDinh
                     {
                         TenThamSo = ten,
-                        GiaTriSo = 0
+                        GiaTriSo = 0,
+                        ThuTu = i
                     });
                 }
                 else
                 {
                     existingParam.TenThamSo = ten;
                     existingParam.GiaTriSo = 0;
+                    existingParam.ThuTu = i;
                 }
             }
 

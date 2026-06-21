@@ -12,7 +12,7 @@ public class BaoGia : AuditableEntity
     public decimal ThueSuat { get; set; } = 0.08m;
     public decimal TongTienTruocThue { get; set; }
     public decimal TongTienSauThue { get; set; }
-    public string TrangThai { get; set; } = "DANG_XU_LY";
+    public string TrangThai { get; set; } = "CHUA_XU_LY";
 
     public ICollection<ChiTietBaoGia> ChiTietBaoGias { get; set; } = [];
 }

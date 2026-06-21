@@ -5,6 +5,9 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
+import FormulaDisplay from '../components/FormulaDisplay';
+import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
+import { findDuplicateThamSo, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
 import type { NhomSanPham, ThamSoCoDinh } from '../types';
 
 export default function ProductsPage() {
@@ -33,17 +36,29 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
+  useOpenCreateFromNavigation(() => openModal());
+
   const onSave = async () => {
     const values = await form.validateFields();
-    if (editing) {
-      await updateNhomSanPham(editing.id, values);
-      message.success('Đã cập nhật sản phẩm');
-    } else {
-      await createNhomSanPham(values);
-      message.success('Đã thêm sản phẩm');
+    const duplicateMsg = findDuplicateThamSo(values.thamSo ?? []);
+    if (duplicateMsg) {
+      message.warning(duplicateMsg);
+      return;
     }
-    setOpen(false);
-    load();
+    try {
+      if (editing) {
+        await updateNhomSanPham(editing.id, values);
+        message.success('Đã cập nhật sản phẩm');
+      } else {
+        await createNhomSanPham(values);
+        message.success('Đã thêm sản phẩm');
+      }
+      setOpen(false);
+      load();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      message.error(msg || 'Lưu thất bại');
+    }
   };
 
   return (
@@ -63,13 +78,15 @@ export default function ProductsPage() {
           {
             title: 'Công thức ∑Ssx (m²)',
             dataIndex: 'congThucDienTich',
-            render: (value: string) => value || '-',
+            width: 360,
+            render: (value: string) => <FormulaDisplay value={value} variant="inline" emptyText="-" />,
           },
           {
             title: 'Tham số nhập trên form',
             dataIndex: 'thamSoCoDinhs',
             width: 220,
-            render: (ts: ThamSoCoDinh[]) => ts?.map((t) => t.tenThamSo).join(', ') || '-',
+            render: (ts: ThamSoCoDinh[]) =>
+              sortOrderedThamSoCoDinhs(ts ?? []).map((t) => t.tenThamSo).join(', ') || '-',
           },
           {
             title: 'Thao tác',
@@ -116,6 +133,9 @@ export default function ProductsPage() {
             {(fields, { add, remove }) => (
               <>
                 <div style={{ marginBottom: 8, fontWeight: 600 }}>Tham số người dùng nhập trên form đơn hàng</div>
+                <div style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)', fontSize: 13 }}>
+                  Mỗi tham số phải khác nhau (không trùng tên, không trùng ô W/H — ví dụ không thêm cả W và Wmax).
+                </div>
                 {fields.map((field) => (
                   <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
                     <Form.Item

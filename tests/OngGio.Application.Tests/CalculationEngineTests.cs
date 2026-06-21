@@ -144,7 +144,7 @@ public class CalculationEngineTests
 
         Assert.False(result.ApDungGiaSan);
 
-        Assert.Equal(result.TongDienTichLo * 185_000m, result.ThanhTienTon);
+        Assert.Equal(Math.Round(result.TongDienTichLo * 185_000m, 0, MidpointRounding.AwayFromZero), result.ThanhTienTon);
 
         Assert.Equal(result.DienTichSx1Cai / 1.2m, result.DienTichSanXuatMetToi);
 

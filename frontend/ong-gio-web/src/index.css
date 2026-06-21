@@ -1,3 +1,14 @@
+/* Toast cảnh báo validation trên form đơn hàng — gấp đôi kích thước mặc định. */
+.order-form-validation-message .ant-message-notice-content {
+  font-size: 28px;
+  line-height: 1.4;
+  padding: 20px 24px;
+}
+
+.order-form-validation-message .anticon {
+  font-size: 28px;
+}
+
 /* Style nền và font cơ bản cho toàn bộ client. */
 body {
   margin: 0;

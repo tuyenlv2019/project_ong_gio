@@ -1,11 +1,12 @@
 /**
  * Trang đăng nhập có captcha và xử lý trạng thái đăng nhập.
  */
-import { Card, Form, Input, Button, message, Spin } from 'antd';
+import { Card, Form, Input, Button, message, Spin, Typography } from 'antd';
 import { LockOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../authService';
+import './LoginPage.css';
 
 export default function LoginPage() {
   const [form] = Form.useForm();
@@ -71,18 +72,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      minHeight: '100vh', 
-      backgroundColor: '#f0f2f5' 
-    }}>
-      <Card 
-        style={{ width: 400 }}
-        title="Đăng nhập"
-        bordered={false}
-      >
+    <div className="login-page">
+      <Card className="login-card" bordered={false}>
+        <div className="login-logo-wrap">
+          <img src="/logo-cty.png" alt="THUAN PHONG M&E Co.Ltd" className="login-logo" />
+        </div>
+        <Typography.Title level={4} className="login-title">
+          Đăng nhập
+        </Typography.Title>
         <Spin spinning={loading}>
           <Form
             form={form}

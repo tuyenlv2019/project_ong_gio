@@ -5,6 +5,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { createNguoiDung, deleteNguoiDung, getNguoiDungs, updateNguoiDung } from '../api';
+import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { NguoiDung } from '../types';
 
 export default function UsersPage() {
@@ -27,6 +28,8 @@ export default function UsersPage() {
     );
     setOpen(true);
   };
+
+  useOpenCreateFromNavigation(() => openModal());
 
   const onSave = async () => {
     const values = await form.validateFields();
