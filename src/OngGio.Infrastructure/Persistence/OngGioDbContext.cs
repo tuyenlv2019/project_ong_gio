@@ -83,6 +83,7 @@ public class OngGioDbContext : DbContext
             e.ToTable("chi_tiet_bao_gia");
             e.HasKey(x => x.Id);
             e.Property(x => x.TenSanPham).HasMaxLength(300);
+            e.Property(x => x.GhiChu).HasMaxLength(1000);
             e.Property(x => x.DonViTinh).HasMaxLength(50).HasDefaultValue("cai");
             e.Property(x => x.ThamSoNhapJson).HasColumnName("tham_so_nhap").HasColumnType("jsonb");
             e.Property(x => x.TrangThaiCongThuc).HasMaxLength(50);

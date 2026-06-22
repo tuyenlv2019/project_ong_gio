@@ -78,6 +78,7 @@ public record CreateBaoGiaLineRequest(
     IReadOnlyDictionary<string, decimal>? ThamSoNhap = null,
     string? TenSanPham = null,
     string? DonViTinh = null,
+    string? GhiChu = null,
     decimal ThueSuat = 0.08m,
     decimal ThanhTienTon = 0);
 

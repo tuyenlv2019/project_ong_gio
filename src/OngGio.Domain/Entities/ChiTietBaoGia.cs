@@ -10,6 +10,7 @@ public class ChiTietBaoGia : AuditableEntity
     public int NhomSanPhamId { get; set; }
     public int LoaiTonId { get; set; }
     public string? TenSanPham { get; set; }
+    public string? GhiChu { get; set; }
     public string DonViTinh { get; set; } = "cai";
     public decimal WInput { get; set; }
     public decimal HInput { get; set; }

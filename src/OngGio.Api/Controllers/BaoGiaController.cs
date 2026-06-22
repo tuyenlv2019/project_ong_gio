@@ -119,9 +119,11 @@ public class BaoGiaController : ControllerBase
         try
         {
             var bytes = await _baoGiaService.ExportExcelAsync(id, ct);
+            var baoGia = await _baoGiaService.GetByIdAsync(id, ct);
+            var fileName = baoGia?.MaBaoGia ?? $"BaoGia_{id}";
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"BaoGia_{id}.xlsx");
+                $"{fileName}.xlsx");
         }
         catch (KeyNotFoundException)
         {

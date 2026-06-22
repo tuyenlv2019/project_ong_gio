@@ -13,6 +13,12 @@
     <ProjectReference Include="..\OngGio.Domain\OngGio.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Templates\BaoGiaExportTemplate.xlsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

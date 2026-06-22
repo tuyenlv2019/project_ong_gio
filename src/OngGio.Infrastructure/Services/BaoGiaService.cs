@@ -1,5 +1,4 @@
 using System.Text.Json;
-using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using OngGio.Application.Calculation;
 using OngGio.Application.Services;
@@ -160,58 +159,7 @@ public class BaoGiaService : IBaoGiaService
         var baoGia = await GetByIdAsync(id, ct)
             ?? throw new KeyNotFoundException($"Khong tim thay bao gia id={id}");
 
-        using var workbook = new XLWorkbook();
-        var sheet = workbook.Worksheets.Add("BaoGia");
-
-        sheet.Cell(1, 1).Value = "Ma bao gia";
-        sheet.Cell(1, 2).Value = baoGia.MaBaoGia;
-        sheet.Cell(2, 1).Value = "Khach hang";
-        sheet.Cell(2, 2).Value = baoGia.TenKhachHang;
-        sheet.Cell(3, 1).Value = "Trang thai";
-        sheet.Cell(3, 2).Value = baoGia.TrangThai;
-        sheet.Cell(4, 1).Value = "Ngay tao";
-        sheet.Cell(4, 2).Value = baoGia.NgayTao.ToString("dd/MM/yyyy HH:mm");
-
-        var headers = new[]
-        {
-            "STT", "Ten san pham", "Loai san pham", "Loai ton", "W (mm)", "H (mm)", "Don vi tinh", "SL", "Thue suat",
-            "Dien tich SX/cai (m2)", "Tong dien tich (m2)", "Trong luong (kg)",
-            "Thanh tien ton", "Don gia", "Thanh tien"
-        };
-        for (var i = 0; i < headers.Length; i++)
-            sheet.Cell(6, i + 1).Value = headers[i];
-
-        var row = 7;
-        var stt = 1;
-        foreach (var line in baoGia.ChiTietBaoGias)
-        {
-            sheet.Cell(row, 1).Value = stt++;
-            sheet.Cell(row, 2).Value = line.TenSanPham ?? "";
-            sheet.Cell(row, 3).Value = line.NhomSanPham?.TenNhom ?? "";
-            sheet.Cell(row, 4).Value = $"{line.LoaiTon?.ThuongHieu} {line.LoaiTon?.DoDay}mm";
-            sheet.Cell(row, 5).Value = line.WInput;
-            sheet.Cell(row, 6).Value = line.HInput;
-            sheet.Cell(row, 7).Value = line.DonViTinh;
-            sheet.Cell(row, 8).Value = line.SoLuong;
-            sheet.Cell(row, 9).Value = line.ThueSuat;
-            sheet.Cell(row, 10).Value = line.DienTichSx1Cai;
-            sheet.Cell(row, 11).Value = line.TongDienTichLo;
-            sheet.Cell(row, 12).Value = line.TrongLuongKg;
-            sheet.Cell(row, 13).Value = line.ThanhTienTon;
-            sheet.Cell(row, 14).Value = line.DonGiaCuoi;
-            sheet.Cell(row, 15).Value = line.ThanhTien;
-            row++;
-        }
-
-        sheet.Cell(row + 1, 13).Value = "Tong truoc thue:";
-        sheet.Cell(row + 1, 15).Value = baoGia.TongTienTruocThue;
-        sheet.Cell(row + 2, 13).Value = "Tong sau thue:";
-        sheet.Cell(row + 2, 15).Value = baoGia.TongTienSauThue;
-        sheet.Columns().AdjustToContents();
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-        return stream.ToArray();
+        return BaoGiaExcelExporter.Export(baoGia);
     }
 
     private async Task ApplyLinesAsync(BaoGia baoGia, CreateBaoGiaRequest request, CancellationToken ct)
@@ -250,6 +198,7 @@ public class BaoGiaService : IBaoGiaService
                 NhomSanPhamId = line.NhomSanPhamId,
                 LoaiTonId = line.LoaiTonId,
                 TenSanPham = line.TenSanPham,
+                GhiChu = line.GhiChu,
                 DonViTinh = string.IsNullOrWhiteSpace(line.DonViTinh) ? "cai" : line.DonViTinh,
                 WInput = line.W,
                 HInput = line.H,

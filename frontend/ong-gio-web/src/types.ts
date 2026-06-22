@@ -96,6 +96,7 @@ export interface CalculationRequest {
   giaNhanCong: number;
   phuKien: number;
   thamSoNhap?: Record<string, number>;
+  ghiChu?: string;
 }
 
 export interface CalculationResult {
