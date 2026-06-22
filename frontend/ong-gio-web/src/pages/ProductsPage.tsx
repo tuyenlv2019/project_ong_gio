@@ -6,26 +6,24 @@ import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, message } f
 import { useEffect, useMemo, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
 import FormulaDisplay from '../components/FormulaDisplay';
+import HintInput from '../components/HintInput';
+import ProductImageField from '../components/ProductImageField';
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import { findDuplicateThamSo, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
+import { createSttColumn } from '../utils/tableColumns';
+import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
+import { renderEllipsisCell } from '../utils/tableCellRender';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
-import { API_BASE } from '../types';
+import { resolveMasterImageUrl } from '../utils/imageUrl';
 import type { NhomSanPham, ThamSoCoDinh } from '../types';
-
-function resolveMasterImageUrl(path?: string) {
-  if (!path) return undefined;
-  if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith('/')) return `${API_BASE}${path}`;
-  return path;
-}
 
 function getProductSearchText(row: NhomSanPham) {
   const thamSo = sortOrderedThamSoCoDinhs(row.thamSoCoDinhs ?? [])
     .map((item) => item.tenThamSo)
     .join(', ');
 
-  return joinSearchParts(row.tenNhom, row.hinhAnhMinhHoa, row.congThucDienTich, thamSo);
+  return joinSearchParts(row.tenNhom, row.hinhAnhMinhHoa, row.congThucDienTich, thamSo, ...getAuditSearchText(row));
 }
 
 export default function ProductsPage() {
@@ -96,10 +94,13 @@ export default function ProductsPage() {
     >
       <TableSearchBar value={search} onChange={setSearch} />
       <Table
+        className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
+        scroll={{ x: 1520 }}
         columns={[
-          { title: 'Tên nhóm', dataIndex: 'tenNhom', width: 200 },
+          createSttColumn<NhomSanPham>(),
+          { title: 'Tên nhóm', dataIndex: 'tenNhom', width: 200, ellipsis: true, render: renderEllipsisCell },
           {
             title: 'Hình ảnh',
             dataIndex: 'hinhAnhMinhHoa',
@@ -127,12 +128,15 @@ export default function ProductsPage() {
             title: 'Tham số nhập trên form',
             dataIndex: 'thamSoCoDinhs',
             width: 220,
+            ellipsis: true,
             render: (ts: ThamSoCoDinh[]) =>
-              sortOrderedThamSoCoDinhs(ts ?? []).map((t) => t.tenThamSo).join(', ') || '-',
+              renderEllipsisCell(sortOrderedThamSoCoDinhs(ts ?? []).map((t) => t.tenThamSo).join(', ') || undefined),
           },
+          ...createAuditColumns<NhomSanPham>(),
           {
             title: 'Thao tác',
             width: 120,
+            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
@@ -164,15 +168,32 @@ export default function ProductsPage() {
           border-radius: 4px;
           background: #fafafa;
         }
+        .product-image-upload .ant-upload-select {
+          width: 128px !important;
+          height: 128px !important;
+        }
+        .product-image-upload-preview {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        .product-image-upload-placeholder {
+          text-align: center;
+          color: rgba(0, 0, 0, 0.45);
+        }
       `}</style>
 
       <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={() => setOpen(false)} width={720}>
         <Form form={form} layout="vertical">
           <Form.Item name="tenNhom" label="Tên nhóm" rules={[{ required: true }]}>
-            <Input placeholder="Co 90 độ, Ống thẳng..." />
+            <HintInput placeholder="Co 90 độ, Ống thẳng..." />
           </Form.Item>
-          <Form.Item name="hinhAnhMinhHoa" label="Ảnh minh họa (URL)">
-            <Input placeholder="/images/co90.png" />
+          <Form.Item
+            name="hinhAnhMinhHoa"
+            label="Ảnh minh họa"
+            extra="Tải ảnh từ máy (JPG, PNG, GIF, WEBP — tối đa 5MB) hoặc nhập URL nếu ảnh đã có sẵn."
+          >
+            <ProductImageField />
           </Form.Item>
           <Form.Item
             name="congThucDienTich"
@@ -200,7 +221,7 @@ export default function ProductsPage() {
                       rules={[{ required: true, message: 'Nhập tên tham số' }]}
                       style={{ flex: 1, marginBottom: 0 }}
                     >
-                      <Input placeholder="W, H, L, R, r..." style={{ width: 280 }} />
+                      <HintInput placeholder="W, H, L, R, r..." style={{ width: 280 }} />
                     </Form.Item>
                     <Button danger onClick={() => remove(field.name)}>
                       Xóa

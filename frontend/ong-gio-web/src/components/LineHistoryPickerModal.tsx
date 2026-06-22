@@ -1,7 +1,9 @@
 import { SearchOutlined } from '@ant-design/icons';
-import { Input, Modal, Table, Typography } from 'antd';
+import { Modal, Table, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { getBaoGiaLineHistory } from '../api';
+import HintInput from './HintInput';
+import { renderEllipsisCell } from '../utils/tableCellRender';
 import type { BaoGiaLineHistory } from '../types';
 
 const { Text } = Typography;
@@ -80,7 +82,7 @@ export default function LineHistoryPickerModal({
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
         Nhấn F4 tại ô Tên sản phẩm để mở hộp thoại này. Chọn một dòng để điền nhanh thông tin.
       </Text>
-      <Input
+      <HintInput
         allowClear
         autoFocus
         prefix={<SearchOutlined />}
@@ -101,17 +103,18 @@ export default function LineHistoryPickerModal({
           style: { cursor: 'pointer' },
         })}
         columns={[
-          { title: 'Tên sản phẩm', dataIndex: 'tenSanPham', width: 180 },
-          { title: 'Loại SP', dataIndex: 'tenNhom', width: 140 },
+          { title: 'Tên sản phẩm', dataIndex: 'tenSanPham', width: 180, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Loại SP', dataIndex: 'tenNhom', width: 140, ellipsis: true, render: renderEllipsisCell },
           {
             title: 'Kích thước',
             width: 160,
-            render: (_: unknown, row: BaoGiaLineHistory) => formatDimensionSummary(row),
+            ellipsis: true,
+            render: (_: unknown, row: BaoGiaLineHistory) => renderEllipsisCell(formatDimensionSummary(row)),
           },
-          { title: 'Loại tôn', dataIndex: 'loaiTonLabel', width: 120 },
+          { title: 'Loại tôn', dataIndex: 'loaiTonLabel', width: 120, ellipsis: true, render: renderEllipsisCell },
           { title: 'SL', dataIndex: 'soLuong', width: 56, align: 'center' },
-          { title: 'Mã đơn', dataIndex: 'maBaoGia', width: 110 },
-          { title: 'Khách hàng', dataIndex: 'tenKhachHang', width: 140 },
+          { title: 'Mã đơn', dataIndex: 'maBaoGia', width: 110, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Khách hàng', dataIndex: 'tenKhachHang', width: 140, ellipsis: true, render: renderEllipsisCell },
           {
             title: 'Ngày tạo',
             dataIndex: 'ngayTao',

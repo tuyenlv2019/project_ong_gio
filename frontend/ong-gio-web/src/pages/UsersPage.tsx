@@ -8,6 +8,9 @@ import { createNguoiDung, deleteNguoiDung, getNguoiDungs, updateNguoiDung } from
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { NguoiDung } from '../types';
+import { createSttColumn } from '../utils/tableColumns';
+import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
+import { renderEllipsisCell } from '../utils/tableCellRender';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
 function getUserSearchText(row: NguoiDung) {
@@ -17,6 +20,7 @@ function getUserSearchText(row: NguoiDung) {
     row.vaiTro,
     row.vaiTro === 'ADMIN' ? 'Admin' : 'Nhân viên',
     row.dangHoatDong ? 'Hoạt động' : 'Khóa',
+    ...getAuditSearchText(row),
   );
 }
 
@@ -73,23 +77,31 @@ export default function UsersPage() {
     >
       <TableSearchBar value={search} onChange={setSearch} />
       <Table
+        className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
+        scroll={{ x: 1040 }}
         columns={[
-          { title: 'Tên đăng nhập', dataIndex: 'tenDangNhap' },
-          { title: 'Họ tên', dataIndex: 'hoTen' },
+          createSttColumn<NguoiDung>(),
+          { title: 'Tên đăng nhập', dataIndex: 'tenDangNhap', width: 140, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Họ tên', dataIndex: 'hoTen', width: 160, ellipsis: true, render: renderEllipsisCell },
           {
             title: 'Vai trò',
             dataIndex: 'vaiTro',
+            width: 110,
             render: (v) => <Tag color={v === 'ADMIN' ? 'red' : 'blue'}>{v}</Tag>,
           },
           {
             title: 'Trạng thái',
             dataIndex: 'dangHoatDong',
+            width: 120,
             render: (v) => (v ? <Tag color="success">Hoạt động</Tag> : <Tag>Khóa</Tag>),
           },
+          ...createAuditColumns<NguoiDung>(),
           {
             title: 'Thao tác',
+            width: 100,
+            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />

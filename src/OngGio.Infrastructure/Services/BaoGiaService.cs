@@ -42,19 +42,33 @@ public class BaoGiaService : IBaoGiaService
     /// <returns>Báo giá vừa được tạo.</returns>
     public async Task<BaoGia> CreateAsync(CreateBaoGiaRequest request, CancellationToken ct = default)
     {
-        var baoGia = new BaoGia
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            MaBaoGia = await GenerateMaBaoGiaAsync(ct),
-            TenKhachHang = request.TenKhachHang,
-            NgayTao = DateTime.UtcNow,
-            ThueSuat = request.ThueSuat,
-            TrangThai = NormalizeTrangThai(request.TrangThai)
-        };
+            var baoGia = new BaoGia
+            {
+                MaBaoGia = await GenerateMaBaoGiaAsync(ct),
+                TenKhachHang = request.TenKhachHang,
+                NgayTao = DateTime.UtcNow,
+                ThueSuat = request.ThueSuat,
+                TrangThai = NormalizeTrangThai(request.TrangThai)
+            };
 
-        await ApplyLinesAsync(baoGia, request, ct);
-        _db.BaoGias.Add(baoGia);
-        await _db.SaveChangesAsync(ct);
-        return baoGia;
+            await ApplyLinesAsync(baoGia, request, ct);
+            _db.BaoGias.Add(baoGia);
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                return baoGia;
+            }
+            catch (DbUpdateException) when (attempt < maxAttempts - 1)
+            {
+                DetachBaoGia(baoGia);
+            }
+        }
+
+        throw new InvalidOperationException("Không thể tạo mã báo giá duy nhất. Vui lòng thử lại.");
     }
 
     /// <summary>
@@ -322,8 +336,48 @@ public class BaoGiaService : IBaoGiaService
     private async Task<string> GenerateMaBaoGiaAsync(CancellationToken ct)
     {
         var year = DateTime.UtcNow.Year;
-        var count = await _db.BaoGias.CountAsync(x => x.NgayTao.Year == year, ct);
-        return $"BG-{year}-{(count + 1):D3}";
+        var prefix = $"BG-{year}-";
+
+        var existingCodes = await _db.BaoGias
+            .AsNoTracking()
+            .Where(x => x.MaBaoGia.StartsWith(prefix))
+            .Select(x => x.MaBaoGia)
+            .ToListAsync(ct);
+
+        var nextSequence = existingCodes
+            .Select(ParseMaBaoGiaSequence)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        for (var offset = 0; offset < 1000; offset++)
+        {
+            var candidate = $"{prefix}{(nextSequence + offset):D3}";
+            if (!await _db.BaoGias.AsNoTracking().AnyAsync(x => x.MaBaoGia == candidate, ct))
+                return candidate;
+        }
+
+        throw new InvalidOperationException("Không thể sinh mã báo giá duy nhất.");
+    }
+
+    private static int ParseMaBaoGiaSequence(string maBaoGia)
+    {
+        var lastDash = maBaoGia.LastIndexOf('-');
+        if (lastDash < 0 || lastDash >= maBaoGia.Length - 1)
+            return 0;
+
+        return int.TryParse(maBaoGia[(lastDash + 1)..], out var sequence) ? sequence : 0;
+    }
+
+    private void DetachBaoGia(BaoGia baoGia)
+    {
+        foreach (var line in baoGia.ChiTietBaoGias.ToList())
+        {
+            if (_db.Entry(line).State != EntityState.Detached)
+                _db.Entry(line).State = EntityState.Detached;
+        }
+
+        if (_db.Entry(baoGia).State != EntityState.Detached)
+            _db.Entry(baoGia).State = EntityState.Detached;
     }
 
     private static string NormalizeTrangThai(string? trangThai) =>

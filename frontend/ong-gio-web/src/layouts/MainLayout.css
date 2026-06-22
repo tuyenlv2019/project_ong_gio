@@ -1,5 +1,5 @@
 .brand-sider {
-  background: linear-gradient(180deg, #003d82 0%, #0056b3 55%, #0068c9 100%) !important;
+  background: var(--brand-table-header-bg) !important;
   box-shadow: 2px 0 12px rgba(0, 61, 130, 0.25);
 }
 
@@ -34,7 +34,7 @@
 }
 
 .brand-sidebar-menu.ant-menu-dark .ant-menu-item .anticon {
-  color: #7ddfff;
+  color: var(--brand-accent-light);
 }
 
 .brand-sidebar-menu.ant-menu-dark .ant-menu-item:hover {
@@ -46,17 +46,17 @@
   background: linear-gradient(90deg, rgba(0, 194, 255, 0.35) 0%, rgba(77, 208, 225, 0.2) 100%) !important;
   color: #fff;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 #00c2ff;
+  box-shadow: inset 3px 0 0 var(--brand-accent);
 }
 
 .brand-sidebar-menu.ant-menu-dark .ant-menu-item-selected .anticon {
-  color: #00e5ff;
+  color: var(--brand-accent-light);
 }
 
 .brand-header {
   background: #fff !important;
   padding: 0 24px !important;
-  border-bottom: 2px solid #00c2ff !important;
+  border-bottom: 2px solid var(--brand-accent) !important;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -65,23 +65,23 @@
 
 .brand-header-title {
   margin: 0 !important;
-  color: #0056b3 !important;
+  color: var(--brand-blue) !important;
   font-weight: 600 !important;
 }
 
 .brand-header-user {
-  color: #0056b3;
+  color: var(--brand-blue);
 }
 
 .brand-header-user strong {
-  color: #003d82;
+  color: var(--brand-blue-dark);
 }
 
 .brand-header .ant-btn-text {
-  color: #0056b3;
+  color: var(--brand-blue);
 }
 
 .brand-header .ant-btn-text:hover {
-  color: #00c2ff !important;
+  color: var(--brand-accent) !important;
   background: rgba(0, 194, 255, 0.1) !important;
 }

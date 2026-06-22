@@ -63,6 +63,7 @@ public class OngGioDbContext : DbContext
             e.ToTable("bao_gia");
             e.HasKey(x => x.Id);
             e.Property(x => x.MaBaoGia).HasMaxLength(50).IsRequired();
+            e.HasIndex(x => x.MaBaoGia).IsUnique();
             e.Property(x => x.TenKhachHang).HasMaxLength(300).IsRequired();
             e.Property(x => x.TrangThai).HasMaxLength(50).HasDefaultValue("CHUA_XU_LY");
         });

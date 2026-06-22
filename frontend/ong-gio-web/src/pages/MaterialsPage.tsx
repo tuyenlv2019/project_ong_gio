@@ -8,6 +8,9 @@ import { createLoaiTon, deleteLoaiTon, formatMoney, getLoaiTons, moneyInputNumbe
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { LoaiTon } from '../types';
+import { createSttColumn } from '../utils/tableColumns';
+import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
+import { renderEllipsisCell } from '../utils/tableCellRender';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
 function formatKgMetToi(value: number) {
@@ -22,6 +25,7 @@ function getMaterialSearchText(row: LoaiTon) {
     row.donGiaM2,
     formatKgMetToi(row.kgMoiMetToi),
     row.kgMoiMetToi,
+    ...getAuditSearchText(row),
   );
 }
 
@@ -74,19 +78,27 @@ export default function MaterialsPage() {
     >
       <TableSearchBar value={search} onChange={setSearch} />
       <Table
+        className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
+        scroll={{ x: 1040 }}
         columns={[
-          { title: 'Thương hiệu', dataIndex: 'thuongHieu' },
-          { title: 'Độ dày (mm)', dataIndex: 'doDay' },
-          { title: 'Đơn giá/m² (VND)', dataIndex: 'donGiaM2', render: (v) => `${formatMoney(v)} VND` },
+          createSttColumn<LoaiTon>(),
+          { title: 'Thương hiệu', dataIndex: 'thuongHieu', width: 140, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Độ dày (mm)', dataIndex: 'doDay', width: 110, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Đơn giá/m² (VND)', dataIndex: 'donGiaM2', width: 150, ellipsis: true, render: (v) => renderEllipsisCell(`${formatMoney(v)} VND`) },
           {
             title: 'Khối lượng (kg/1mét tới)',
             dataIndex: 'kgMoiMetToi',
-            render: (v) => formatKgMetToi(v),
+            width: 170,
+            ellipsis: true,
+            render: (v) => renderEllipsisCell(formatKgMetToi(v)),
           },
+          ...createAuditColumns<LoaiTon>(),
           {
             title: 'Thao tác',
+            width: 100,
+            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />

@@ -16,6 +16,10 @@ export interface NhomSanPham {
   hinhAnhMinhHoa?: string;
   congThucDienTich?: string;
   thamSoCoDinhs: ThamSoCoDinh[];
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface LoaiTon {
@@ -24,6 +28,10 @@ export interface LoaiTon {
   doDay: number;
   donGiaM2: number;
   kgMoiMetToi: number;
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface BaoGia {
@@ -71,6 +79,9 @@ export interface NguoiDung {
   vaiTro: string;
   dangHoatDong: boolean;
   createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface DashboardStats {

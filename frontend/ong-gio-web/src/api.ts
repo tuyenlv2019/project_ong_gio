@@ -84,6 +84,20 @@ export async function deleteNhomSanPham(id: number) {
 }
 
 /**
+ * Tải ảnh minh họa sản phẩm lên server.
+ * @param file File ảnh người dùng chọn.
+ * @returns Đường dẫn public lưu trong hệ thống.
+ */
+export async function uploadNhomSanPhamImage(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post<{ path: string }>('/api/nhom-san-pham/upload-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.path;
+}
+
+/**
  * Lấy danh sách loại tôn.
  * @returns Danh sách loại tôn.
  */

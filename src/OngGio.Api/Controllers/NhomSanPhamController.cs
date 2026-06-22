@@ -59,7 +59,8 @@ public class NhomSanPhamController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(await _db.NhomSanPhams
             .Include(x => x.ThamSoCoDinhs.OrderBy(t => t.ThuTu))
-            .OrderBy(x => x.TenNhom)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
             .ToListAsync(ct));
 
     [HttpGet("{id:int}")]
@@ -69,6 +70,40 @@ public class NhomSanPhamController : ControllerBase
             .Include(x => x.ThamSoCoDinhs.OrderBy(t => t.ThuTu))
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         return item is null ? NotFound() : Ok(item);
+    }
+
+    /// <summary>
+    /// Tải ảnh minh họa sản phẩm lên server.
+    /// </summary>
+    /// <param name="file">File ảnh.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Đường dẫn public của ảnh vừa tải lên.</returns>
+    [HttpPost("upload-image")]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> UploadImage(IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "Chưa chọn file ảnh" });
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".webp"))
+            return BadRequest(new { message = "Chỉ hỗ trợ ảnh JPG, PNG, GIF hoặc WEBP" });
+
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { message = "Ảnh không được vượt quá 5MB" });
+
+        var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "uploads");
+        Directory.CreateDirectory(uploadDir);
+
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(uploadDir, fileName);
+
+        await using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream, ct);
+        }
+
+        return Ok(new { path = $"/images/uploads/{fileName}" });
     }
 
     [HttpPost]

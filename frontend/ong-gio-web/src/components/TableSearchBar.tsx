@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons';
-import { Input } from 'antd';
+import HintInput from './HintInput';
 
 type TableSearchBarProps = {
   value: string;
@@ -13,7 +13,7 @@ export default function TableSearchBar({
   placeholder = 'Tìm kiếm trong danh sách...',
 }: TableSearchBarProps) {
   return (
-    <Input
+    <HintInput
       allowClear
       prefix={<SearchOutlined />}
       placeholder={placeholder}

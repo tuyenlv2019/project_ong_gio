@@ -3,7 +3,6 @@
  */
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Popconfirm, Select, Space, Table, message } from 'antd';
-import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TableSearchBar from '../components/TableSearchBar';
@@ -16,29 +15,30 @@ import {
   updateBaoGiaStatus,
 } from '../api';
 import type { BaoGia } from '../types';
+import { createSttColumn } from '../utils/tableColumns';
+import {
+  formatAuditDateTime,
+  formatAuditUser,
+  getAuditSearchText,
+  createAuditColumns,
+} from '../utils/auditDisplay';
+import { renderEllipsisCell } from '../utils/tableCellRender';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
-function formatDateTime(value?: string) {
-  if (!value) return '—';
-  const parsed = dayjs(value);
-  if (!parsed.isValid() || parsed.year() <= 1) return '—';
-  return parsed.format('DD/MM/YYYY HH:mm');
-}
-
 function getCreatedAt(row: BaoGia) {
-  return formatDateTime(row.createdAt || row.ngayTao);
+  return formatAuditDateTime(row.createdAt || row.ngayTao);
 }
 
 function getUpdatedAt(row: BaoGia) {
-  return formatDateTime(row.updatedAt);
+  return formatAuditDateTime(row.updatedAt);
 }
 
 function getCreatedBy(row: BaoGia) {
-  return row.createdBy?.trim() || '—';
+  return formatAuditUser(row.createdBy);
 }
 
 function getUpdatedBy(row: BaoGia) {
-  return row.updatedBy?.trim() || '—';
+  return formatAuditUser(row.updatedBy);
 }
 
 function getOrderSearchText(row: BaoGia) {
@@ -56,6 +56,7 @@ function getOrderSearchText(row: BaoGia) {
     formatMoney(row.tongTienTruocThue),
     row.tongTienSauThue,
     row.tongTienTruocThue,
+    ...getAuditSearchText(row),
   );
 }
 
@@ -106,23 +107,15 @@ export default function OrdersPage() {
     >
       <TableSearchBar value={search} onChange={setSearch} />
       <Table
+        className="brand-list-table"
         rowKey="id"
         loading={loading}
         dataSource={filteredData}
-        scroll={{ x: 1420 }}
+        scroll={{ x: 1380 }}
         columns={[
-          { title: 'Mã BG', dataIndex: 'maBaoGia', width: 120, fixed: 'left' as const },
-          { title: 'Khách hàng', dataIndex: 'tenKhachHang', width: 160 },
-          {
-            title: 'Ngày giờ tạo',
-            width: 150,
-            render: (_: unknown, row: BaoGia) => getCreatedAt(row),
-          },
-          {
-            title: 'Người tạo',
-            width: 140,
-            render: (_: unknown, row: BaoGia) => getCreatedBy(row),
-          },
+          createSttColumn<BaoGia>(),
+          { title: 'Mã Báo Giá', dataIndex: 'maBaoGia', width: 130, ellipsis: true, render: renderEllipsisCell },
+          { title: 'Khách hàng', dataIndex: 'tenKhachHang', width: 160, ellipsis: true, render: renderEllipsisCell },
           {
             title: 'Trạng thái',
             dataIndex: 'trangThai',
@@ -138,21 +131,16 @@ export default function OrdersPage() {
             ),
           },
           {
-            title: 'Người cập nhật',
-            width: 140,
-            render: (_: unknown, row: BaoGia) => getUpdatedBy(row),
-          },
-          {
-            title: 'Cập nhật lúc',
-            width: 150,
-            render: (_: unknown, row: BaoGia) => getUpdatedAt(row),
-          },
-          {
             title: 'Tổng tiền',
             dataIndex: 'tongTienSauThue',
             width: 140,
-            render: (v: number) => `${formatMoney(v)} đ`,
+            ellipsis: true,
+            render: (v: number) => renderEllipsisCell(`${formatMoney(v)} đ`),
           },
+          ...createAuditColumns<BaoGia>({
+            getCreatedAt: (row) => getCreatedAt(row),
+            getUpdatedAt: (row) => getUpdatedAt(row),
+          }),
           {
             title: 'Thao tác',
             width: 200,

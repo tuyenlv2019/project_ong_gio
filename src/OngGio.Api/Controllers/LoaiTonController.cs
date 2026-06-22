@@ -23,7 +23,10 @@ public class LoaiTonController : ControllerBase
     /// <returns>Danh sách loại tôn.</returns>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(await _db.LoaiTons.OrderBy(x => x.ThuongHieu).ThenBy(x => x.DoDay).ToListAsync(ct));
+        Ok(await _db.LoaiTons
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct));
 
     /// <summary>
     /// Lấy chi tiết một loại tôn theo id.

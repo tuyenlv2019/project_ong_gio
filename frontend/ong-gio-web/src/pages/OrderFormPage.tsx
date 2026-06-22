@@ -2,8 +2,8 @@
  * Trang tạo/sửa báo giá với preview tính toán theo từng dòng.
  */
 
-import { Button, Card, Col, Collapse, Form, Input, InputNumber, Row, Select, Space, Statistic, Table, Typography, message } from 'antd';
-import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Collapse, Form, InputNumber, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
+import { ArrowDownOutlined, ArrowUpOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -18,25 +18,26 @@ import {
   updateBaoGia,
 } from '../api';
 import type { BaoGiaLineHistory, CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
-import { API_BASE } from '../types';
 import FormulaDisplay from '../components/FormulaDisplay';
+import EllipsisText from '../components/EllipsisText';
+import HintInput from '../components/HintInput';
+import HintInputNumber from '../components/HintInputNumber';
+import HintSelect from '../components/HintSelect';
 import LineHistoryPickerModal from '../components/LineHistoryPickerModal';
 import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
+import { resolveMasterImageUrl } from '../utils/imageUrl';
 
 const { Title, Text } = Typography;
+
+function FieldLabel({ children }: { children: string }) {
+  return <EllipsisText className="price-field-label">{children}</EllipsisText>;
+}
 
 /**
  * Định dạng diện tích hiển thị với 6 chữ số thập phân.
  */
 function formatArea(value: number) {
   return value.toFixed(6);
-}
-
-function resolveMasterImageUrl(path?: string) {
-  if (!path) return undefined;
-  if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith('/')) return `${API_BASE}${path}`;
-  return path;
 }
 
 type DimensionField = {
@@ -177,6 +178,13 @@ function isSkippedTrailingLine(
   return lineIndex === totalLines - 1 && !item?.tenSanPham?.trim();
 }
 
+/** Số dòng thật (không tính dòng đệm trống cuối bảng). */
+function getMovableRowCount(items: Partial<LineFormValues>[]) {
+  if (items.length === 0) return 0;
+  const lastIsBuffer = isSkippedTrailingLine(items.length - 1, items[items.length - 1], items.length);
+  return lastIsBuffer ? items.length - 1 : items.length;
+}
+
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
 
 function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
@@ -211,9 +219,11 @@ export default function OrderFormPage() {
   const [linePreviews, setLinePreviews] = useState<Record<number, CalculationResult>>({});
   const [loading, setLoading] = useState(false);
   const [selectedNhomRow, setSelectedNhomRow] = useState<NhomSanPham | undefined>(undefined);
-  const [requiredHeaders, setRequiredHeaders] = useState<string[]>([]);
+  const [requiredHeaders] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLineIndex, setHistoryLineIndex] = useState<number | null>(null);
+  const [movePopoverIndex, setMovePopoverIndex] = useState<number | null>(null);
+  const [moveTargetStt, setMoveTargetStt] = useState<number>(1);
 
   useEffect(() => {
     (async () => {
@@ -319,6 +329,83 @@ export default function OrderFormPage() {
   const openLineHistory = (lineIndex: number) => {
     setHistoryLineIndex(lineIndex);
     setHistoryOpen(true);
+  };
+
+  const remapLinePreviewsAfterMove = (fromIndex: number, toIndex: number) => {
+    setLinePreviews((prev) => {
+      const len = Math.max(
+        Object.keys(prev).reduce((max, key) => Math.max(max, Number(key) + 1), 0),
+        fromIndex + 1,
+        toIndex + 1,
+      );
+      const arr: (CalculationResult | undefined)[] = Array.from({ length: len }, (_, i) => prev[i]);
+      const [moved] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, moved);
+      const next: Record<number, CalculationResult> = {};
+      arr.forEach((preview, index) => {
+        if (preview !== undefined) next[index] = preview;
+      });
+      return next;
+    });
+  };
+
+  const handleMoveLineTo = async (
+    fromIndex: number,
+    toIndex: number,
+    move: (from: number, to: number) => void,
+  ) => {
+    const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];
+    const movableCount = getMovableRowCount(items);
+    if (
+      fromIndex === toIndex
+      || fromIndex < 0
+      || toIndex < 0
+      || fromIndex >= items.length
+      || toIndex >= movableCount
+      || isSkippedTrailingLine(fromIndex, items[fromIndex], items.length)
+    ) {
+      return;
+    }
+
+    move(fromIndex, toIndex);
+    remapLinePreviewsAfterMove(fromIndex, toIndex);
+
+    const linesAfterMove = form.getFieldValue('lineInputs') || [];
+    ensureNewRowIfNeeded({ lineInputs: linesAfterMove });
+    const finalLines = form.getFieldValue('lineInputs') || [];
+    await refreshPreviews({ lineInputs: finalLines });
+  };
+
+  const handleMoveLine = async (
+    fromIndex: number,
+    direction: 'up' | 'down',
+    move: (from: number, to: number) => void,
+  ) => {
+    const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+    await handleMoveLineTo(fromIndex, toIndex, move);
+  };
+
+  const confirmMoveToStt = async (
+    fromIndex: number,
+    move: (from: number, to: number) => void,
+  ) => {
+    const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];
+    const movableCount = getMovableRowCount(items);
+    const targetStt = Math.round(moveTargetStt);
+
+    if (!Number.isFinite(targetStt) || targetStt < 1 || targetStt > movableCount) {
+      showLargeWarning(`Vui lòng nhập STT từ 1 đến ${movableCount}.`);
+      return;
+    }
+
+    const toIndex = targetStt - 1;
+    if (toIndex === fromIndex) {
+      setMovePopoverIndex(null);
+      return;
+    }
+
+    await handleMoveLineTo(fromIndex, toIndex, move);
+    setMovePopoverIndex(null);
   };
 
   const applyHistoryLine = async (lineIndex: number, item: BaoGiaLineHistory) => {
@@ -531,7 +618,7 @@ export default function OrderFormPage() {
                 label="Tên khách hàng"
                 rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
               >
-                <Input />
+                <HintInput placeholder="Nhập tên khách hàng" />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -540,7 +627,8 @@ export default function OrderFormPage() {
                 label="Trạng thái đơn hàng"
                 rules={[{ required: true, message: 'Vui lòng chọn trạng thái đơn hàng' }]}
               >
-                <Select
+                <HintSelect
+                  placeholder="Chọn trạng thái đơn hàng"
                   options={Object.entries(TRANG_THAI_DON).map(([value, opt]) => ({
                     value,
                     label: opt.label,
@@ -553,7 +641,7 @@ export default function OrderFormPage() {
 
         <Card title="Cụm sản phẩm">
           <Form.List name="lineInputs">
-            {(fields, { add, remove }) => {
+            {(fields, { add, remove, move }) => {
               const columns: any[] = [
                 {
                   title: 'STT',
@@ -569,13 +657,13 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
-                        <span className="price-field-label">Loại sản phẩm</span>
+                        <FieldLabel>Loại sản phẩm</FieldLabel>
                         <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}>
-                          <Select placeholder="Chọn loại" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
+                          <HintSelect placeholder="Chọn loại" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <span className="price-field-label">Tên sản phẩm</span>
+                        <FieldLabel>Tên sản phẩm</FieldLabel>
                         <Form.Item
                           name={[field.name, 'tenSanPham']}
                           noStyle
@@ -585,7 +673,7 @@ export default function OrderFormPage() {
                               : [{ required: true, message: 'Nhập tên sản phẩm' }]
                           }
                         >
-                          <Input
+                          <HintInput
                             placeholder="Nhập tên sản phẩm (F4: chọn từ đơn cũ)"
                             onFocus={() => setHistoryLineIndex(field.name)}
                             onKeyDown={(event) => {
@@ -625,11 +713,12 @@ export default function OrderFormPage() {
                               noStyle
                               rules={[{ required: true, message: `Nhập ${dimension.label}` }]}
                             >
-                              <InputNumber
+                              <HintInputNumber
                                 className="dimension-field-input"
                                 min={dimension.key === 'phan_manh' ? 1 : 0}
                                 step={dimension.key === 'phan_manh' ? 1 : 10}
                                 placeholder={dimension.label}
+                                tooltip={dimension.label}
                                 addonBefore={dimension.label}
                                 controls={false}
                                 style={{ width: '100%' }}
@@ -650,17 +739,17 @@ export default function OrderFormPage() {
                     return (
                       <div className="price-fields-stack">
                         <div className="price-field-row">
-                          <span className="price-field-label">Loại tôn</span>
+                          <FieldLabel>Loại tôn</FieldLabel>
                           <Form.Item
                             name={[field.name, 'loaiTonId']}
                             noStyle
                             rules={requiredRulesFor('Loại tôn') ?? requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }]}
                           >
-                            <Select placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
+                            <HintSelect placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
                           </Form.Item>
                         </div>
                         <div className="price-field-row">
-                          <span className="price-field-label">Trọng lượng (Kg)</span>
+                          <FieldLabel>Trọng lượng (Kg)</FieldLabel>
                           <span className="display-value">{preview ? preview.trongLuongKg.toFixed(2) : '-'}</span>
                         </div>
                       </div>
@@ -678,11 +767,11 @@ export default function OrderFormPage() {
                     return (
                       <div className="price-fields-stack area-fields-stack">
                         <div className="price-field-row">
-                          <span className="price-field-label">∑Ssx (m²)</span>
+                          <FieldLabel>∑Ssx (m²)</FieldLabel>
                           <span className="display-value">{formatArea(preview.dienTichSx1Cai)}</span>
                         </div>
                         <div className="price-field-row">
-                          <span className="price-field-label">∑Ssx (mét tới)</span>
+                          <FieldLabel>∑Ssx (mét tới)</FieldLabel>
                           <span className="display-value">{formatArea(preview.dienTichSanXuatMetToi)}</span>
                         </div>
                       </div>
@@ -696,29 +785,29 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
-                        <span className="price-field-label">Giá tôn (VNĐ)</span>
+                        <FieldLabel>Giá tôn (VNĐ)</FieldLabel>
                         <Form.Item name={[field.name, 'thanhTienTon']} noStyle>
-                          <InputNumber min={0} step={1000} precision={0} controls={false} style={{ width: '100%' }} {...moneyInputNumberProps} />
+                          <HintInputNumber min={0} step={1000} precision={0} controls={false} style={{ width: '100%' }} tooltip="Giá tôn (VNĐ)" {...moneyInputNumberProps} />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <span className="price-field-label">Giá nhân công (VNĐ)</span>
+                        <FieldLabel>Giá nhân công (VNĐ)</FieldLabel>
                         <Form.Item
                           name={[field.name, 'giaNhanCong']}
                           noStyle
                           rules={requiredRulesFor('Giá nhân công (VNĐ)') ? [{ required: true, message: 'Nhập giá nhân công' }] : undefined}
                         >
-                          <InputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} {...moneyInputNumberProps} />
+                          <HintInputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} tooltip="Giá nhân công (VNĐ)" {...moneyInputNumberProps} />
                           </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <span className="price-field-label">Phụ kiện đi kèm (VNĐ)</span>
+                        <FieldLabel>Phụ kiện đi kèm (VNĐ)</FieldLabel>
                         <Form.Item
                           name={[field.name, 'phuKien']}
                           noStyle
                           rules={requiredRulesFor('Phụ kiện đi kèm (VNĐ)') ? [{ required: true, message: 'Nhập phụ kiện' }] : undefined}
                         >
-                          <InputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} {...moneyInputNumberProps} />
+                          <HintInputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} tooltip="Phụ kiện đi kèm (VNĐ)" {...moneyInputNumberProps} />
                         </Form.Item>
                       </div>
                     </div>
@@ -731,21 +820,21 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
-                        <span className="price-field-label">Đơn vị tính</span>
+                        <FieldLabel>Đơn vị tính</FieldLabel>
                         <Form.Item name={[field.name, 'donViTinh']} noStyle rules={requiredRulesFor('Đơn vị tính') ?? [{ required: true, message: 'Nhập đơn vị tính' }]}>
-                          <Input placeholder="cái" />
+                          <HintInput placeholder="cái" tooltip="Đơn vị tính (ví dụ: cái, m², bộ...)" />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <span className="price-field-label">Số lượng</span>
+                        <FieldLabel>Số lượng</FieldLabel>
                         <Form.Item name={[field.name, 'soLuong']} noStyle rules={requiredRulesFor('Số lượng') ?? [{ required: true, message: 'Nhập SL' }]}>
-                          <InputNumber min={1} controls={false} style={{ width: '100%' }} />
+                          <HintInputNumber min={1} controls={false} style={{ width: '100%' }} placeholder="Số lượng" />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <span className="price-field-label">Thuế suất</span>
+                        <FieldLabel>Thuế suất</FieldLabel>
                         <Form.Item name={[field.name, 'thueSuat']} noStyle rules={requiredRulesFor('Thuế suất') ?? [{ required: true, message: 'Nhập thuế suất' }]}>
-                          <InputNumber min={0} max={100} step={1} controls={false} addonAfter="%" style={{ width: '100%' }} />
+                          <HintInputNumber min={0} max={100} step={1} controls={false} addonAfter="%" style={{ width: '100%' }} placeholder="Thuế suất (%)" />
                         </Form.Item>
                       </div>
                     </div>
@@ -768,11 +857,11 @@ export default function OrderFormPage() {
                     return (
                       <div className="price-fields-stack area-fields-stack">
                         <div className="price-field-row">
-                          <span className="price-field-label">Đơn giá (VND)</span>
+                          <FieldLabel>Đơn giá (VND)</FieldLabel>
                           <span className="display-value">{formatMoney(unitPrice)}</span>
                         </div>
                         <div className="price-field-row">
-                          <span className="price-field-label">Thành tiền (VND)</span>
+                          <FieldLabel>Thành tiền (VND)</FieldLabel>
                           <span className="display-value">{formatMoney(lineTotal)}</span>
                         </div>
                       </div>
@@ -792,7 +881,7 @@ export default function OrderFormPage() {
                     return (
                       <div className="price-fields-stack">
                         <div className="price-field-row">
-                          <span className="price-field-label">Ghi chú</span>
+                          <FieldLabel>Ghi chú</FieldLabel>
                           <Form.Item
                             name={[field.name, 'ghiChu']}
                             noStyle
@@ -801,11 +890,11 @@ export default function OrderFormPage() {
                               ?? (requiredRulesFor('Ghi chú/ hình ảnh') ? [{ required: true, message: 'Nhập ghi chú' }] : undefined)
                             }
                           >
-                            <Input placeholder="Nhập ghi chú" />
+                            <HintInput placeholder="Nhập ghi chú" />
                           </Form.Item>
                         </div>
                         <div className="price-field-row">
-                          <span className="price-field-label">Hình ảnh</span>
+                          <FieldLabel>Hình ảnh</FieldLabel>
                           {imageUrl ? (
                             <img
                               src={imageUrl}
@@ -821,13 +910,93 @@ export default function OrderFormPage() {
                   },
                 },
                 {
-                  title: 'Xóa',
+                  title: 'Thao tác',
                   dataIndex: 'action',
-                  width: 80,
+                  width: 96,
                   align: 'center' as const,
-                  render: (_: any, field: any) => (
-                    <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(field.name)} disabled={fields.length === 1} />
-                  ),
+                  render: (_: any, field: any, index: number) => {
+                    const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];
+                    const isBuffer = isSkippedTrailingLine(index, items[index], items.length);
+                    const lastIsBuffer = items.length > 0
+                      && isSkippedTrailingLine(items.length - 1, items[items.length - 1], items.length);
+                    const movableCount = getMovableRowCount(items);
+                    const canMoveUp = index > 0 && !isBuffer;
+                    const canMoveDown = index < fields.length - 1 && !isBuffer && !(lastIsBuffer && index >= items.length - 2);
+
+                    return (
+                      <Space direction="vertical" size={0}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<ArrowUpOutlined />}
+                          title="Di chuyển lên"
+                          disabled={!canMoveUp}
+                          onClick={() => void handleMoveLine(index, 'up', move)}
+                        />
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<ArrowDownOutlined />}
+                          title="Di chuyển xuống"
+                          disabled={!canMoveDown}
+                          onClick={() => void handleMoveLine(index, 'down', move)}
+                        />
+                        <Popover
+                          title="Di chuyển đến dòng"
+                          trigger="click"
+                          open={movePopoverIndex === index}
+                          onOpenChange={(open) => {
+                            if (open) {
+                              setMoveTargetStt(index + 1);
+                              setMovePopoverIndex(index);
+                            } else if (movePopoverIndex === index) {
+                              setMovePopoverIndex(null);
+                            }
+                          }}
+                          content={(
+                            <Space direction="vertical" size={8} style={{ width: 160 }}>
+                              <InputNumber
+                                min={1}
+                                max={movableCount}
+                                precision={0}
+                                controls
+                                addonBefore="STT"
+                                value={moveTargetStt}
+                                onChange={(value) => setMoveTargetStt(value ?? index + 1)}
+                                onPressEnter={() => void confirmMoveToStt(index, move)}
+                                style={{ width: '100%' }}
+                              />
+                              <Button
+                                type="primary"
+                                size="small"
+                                block
+                                onClick={() => void confirmMoveToStt(index, move)}
+                              >
+                                Di chuyển
+                              </Button>
+                            </Space>
+                          )}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<SwapOutlined />}
+                            title="Di chuyển đến dòng (nhập STT)"
+                            disabled={isBuffer || movableCount <= 1}
+                          />
+                        </Popover>
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          icon={<MinusCircleOutlined />}
+                          title="Xóa dòng"
+                          onClick={() => remove(field.name)}
+                          disabled={fields.length === 1}
+                        />
+                      </Space>
+                    );
+                  },
                 },
               ];
 

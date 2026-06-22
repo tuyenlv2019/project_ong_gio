@@ -12,3 +12,7 @@
 
 # Rider
 .idea/
+
+# Uploaded product images (giữ thư mục qua .gitkeep)
+**/wwwroot/images/uploads/*
+!**/wwwroot/images/uploads/.gitkeep
