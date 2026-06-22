@@ -3,13 +3,26 @@
  */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createNguoiDung, deleteNguoiDung, getNguoiDungs, updateNguoiDung } from '../api';
+import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { NguoiDung } from '../types';
+import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
+
+function getUserSearchText(row: NguoiDung) {
+  return joinSearchParts(
+    row.tenDangNhap,
+    row.hoTen,
+    row.vaiTro,
+    row.vaiTro === 'ADMIN' ? 'Admin' : 'Nhân viên',
+    row.dangHoatDong ? 'Hoạt động' : 'Khóa',
+  );
+}
 
 export default function UsersPage() {
   const [data, setData] = useState<NguoiDung[]>([]);
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NguoiDung | null>(null);
   const [form] = Form.useForm();
@@ -18,6 +31,11 @@ export default function UsersPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredData = useMemo(
+    () => filterBySearch(data, search, getUserSearchText),
+    [data, search],
+  );
 
   const openModal = (item?: NguoiDung) => {
     setEditing(item ?? null);
@@ -53,9 +71,10 @@ export default function UsersPage() {
         </Button>
       }
     >
+      <TableSearchBar value={search} onChange={setSearch} />
       <Table
         rowKey="id"
-        dataSource={data}
+        dataSource={filteredData}
         columns={[
           { title: 'Tên đăng nhập', dataIndex: 'tenDangNhap' },
           { title: 'Họ tên', dataIndex: 'hoTen' },

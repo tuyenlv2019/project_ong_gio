@@ -15,6 +15,12 @@ internal static class BaoGiaExcelExporter
     private const int FooterStartRow = 6;
     private const int FooterEndRow = 11;
 
+    // Cột nhập liệu (màu vàng nhạt) vs cột tính theo công thức (màu xanh nhạt) theo mẫu Sheet 2.
+    private static readonly int[] InputColumns = { 2, 3, 7, 8, 9, 10, 11, 12, 15 };
+    private static readonly int[] FormulaColumns = { 4, 5, 6, 13, 14 };
+    private const int InputStyleColumn = 11;   // K
+    private const int FormulaStyleColumn = 4; // D
+
     internal static byte[] Export(BaoGia baoGia)
     {
         var templatePath = ResolveTemplatePath();
@@ -42,6 +48,7 @@ internal static class BaoGiaExcelExporter
 
             templateSheet.Row(StyleSourceRow).CopyTo(sheet.Row(row));
             WriteLineRow(sheet, row, stt++, line);
+            ApplyRowCellColors(sheet, templateSheet, row);
             row++;
         }
 
@@ -95,6 +102,18 @@ internal static class BaoGiaExcelExporter
         sheet.Cell(row, 13).Value = line.DonGiaCuoi;
         sheet.Cell(row, 14).Value = line.ThanhTien;
         sheet.Cell(row, 15).Value = line.GhiChu ?? "";
+    }
+
+    private static void ApplyRowCellColors(IXLWorksheet sheet, IXLWorksheet templateSheet, int row)
+    {
+        var inputFill = templateSheet.Cell(StyleSourceRow, InputStyleColumn).Style.Fill;
+        var formulaFill = templateSheet.Cell(StyleSourceRow, FormulaStyleColumn).Style.Fill;
+
+        foreach (var col in InputColumns)
+            sheet.Cell(row, col).Style.Fill = inputFill;
+
+        foreach (var col in FormulaColumns)
+            sheet.Cell(row, col).Style.Fill = formulaFill;
     }
 
     private static string ResolveTemplatePath()

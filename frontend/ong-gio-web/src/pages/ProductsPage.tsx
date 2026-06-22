@@ -3,15 +3,34 @@
  */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
 import FormulaDisplay from '../components/FormulaDisplay';
+import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import { findDuplicateThamSo, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
+import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
+import { API_BASE } from '../types';
 import type { NhomSanPham, ThamSoCoDinh } from '../types';
+
+function resolveMasterImageUrl(path?: string) {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith('/')) return `${API_BASE}${path}`;
+  return path;
+}
+
+function getProductSearchText(row: NhomSanPham) {
+  const thamSo = sortOrderedThamSoCoDinhs(row.thamSoCoDinhs ?? [])
+    .map((item) => item.tenThamSo)
+    .join(', ');
+
+  return joinSearchParts(row.tenNhom, row.hinhAnhMinhHoa, row.congThucDienTich, thamSo);
+}
 
 export default function ProductsPage() {
   const [data, setData] = useState<NhomSanPham[]>([]);
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NhomSanPham | null>(null);
   const [form] = Form.useForm();
@@ -20,6 +39,11 @@ export default function ProductsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredData = useMemo(
+    () => filterBySearch(data, search, getProductSearchText),
+    [data, search],
+  );
 
   const openModal = (item?: NhomSanPham) => {
     setEditing(item ?? null);
@@ -70,11 +94,29 @@ export default function ProductsPage() {
         </Button>
       }
     >
+      <TableSearchBar value={search} onChange={setSearch} />
       <Table
         rowKey="id"
-        dataSource={data}
+        dataSource={filteredData}
         columns={[
           { title: 'Tên nhóm', dataIndex: 'tenNhom', width: 200 },
+          {
+            title: 'Hình ảnh',
+            dataIndex: 'hinhAnhMinhHoa',
+            width: 120,
+            align: 'center',
+            render: (path: string) => {
+              const url = resolveMasterImageUrl(path);
+              if (!url) return '-';
+              return (
+                <img
+                  src={url}
+                  alt="Ảnh sản phẩm"
+                  className="product-table-image"
+                />
+              );
+            },
+          },
           {
             title: 'Công thức ∑Ssx (m²)',
             dataIndex: 'congThucDienTich',
@@ -109,6 +151,20 @@ export default function ProductsPage() {
           },
         ]}
       />
+
+      <style>{`
+        .product-table-image {
+          display: block;
+          width: 100%;
+          max-width: 100px;
+          max-height: 72px;
+          margin-inline: auto;
+          object-fit: contain;
+          border: 1px solid #f0f0f0;
+          border-radius: 4px;
+          background: #fafafa;
+        }
+      `}</style>
 
       <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={() => setOpen(false)} width={720}>
         <Form form={form} layout="vertical">

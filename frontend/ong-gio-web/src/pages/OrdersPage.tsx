@@ -4,8 +4,9 @@
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Popconfirm, Select, Space, Table, message } from 'antd';
 import dayjs from 'dayjs';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TableSearchBar from '../components/TableSearchBar';
 import {
   TRANG_THAI_DON,
   deleteBaoGia,
@@ -15,6 +16,7 @@ import {
   updateBaoGiaStatus,
 } from '../api';
 import type { BaoGia } from '../types';
+import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
 function formatDateTime(value?: string) {
   if (!value) return '—';
@@ -39,9 +41,28 @@ function getUpdatedBy(row: BaoGia) {
   return row.updatedBy?.trim() || '—';
 }
 
+function getOrderSearchText(row: BaoGia) {
+  const status = TRANG_THAI_DON[row.trangThai]?.label ?? row.trangThai;
+  return joinSearchParts(
+    row.maBaoGia,
+    row.tenKhachHang,
+    getCreatedAt(row),
+    getCreatedBy(row),
+    status,
+    row.trangThai,
+    getUpdatedBy(row),
+    getUpdatedAt(row),
+    formatMoney(row.tongTienSauThue),
+    formatMoney(row.tongTienTruocThue),
+    row.tongTienSauThue,
+    row.tongTienTruocThue,
+  );
+}
+
 export default function OrdersPage() {
   const [data, setData] = useState<BaoGia[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
   const load = async () => {
@@ -56,6 +77,11 @@ export default function OrdersPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredData = useMemo(
+    () => filterBySearch(data, search, getOrderSearchText),
+    [data, search],
+  );
 
   const onDelete = async (id: number) => {
     await deleteBaoGia(id);
@@ -78,10 +104,11 @@ export default function OrdersPage() {
         </Button>
       }
     >
+      <TableSearchBar value={search} onChange={setSearch} />
       <Table
         rowKey="id"
         loading={loading}
-        dataSource={data}
+        dataSource={filteredData}
         scroll={{ x: 1420 }}
         columns={[
           { title: 'Mã BG', dataIndex: 'maBaoGia', width: 120, fixed: 'left' as const },

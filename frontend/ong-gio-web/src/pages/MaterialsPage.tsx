@@ -3,17 +3,31 @@
  */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Table, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createLoaiTon, deleteLoaiTon, formatMoney, getLoaiTons, moneyInputNumberProps, updateLoaiTon } from '../api';
+import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { LoaiTon } from '../types';
+import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
 function formatKgMetToi(value: number) {
   return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value)} kg/1mét tới`;
 }
 
+function getMaterialSearchText(row: LoaiTon) {
+  return joinSearchParts(
+    row.thuongHieu,
+    row.doDay,
+    formatMoney(row.donGiaM2),
+    row.donGiaM2,
+    formatKgMetToi(row.kgMoiMetToi),
+    row.kgMoiMetToi,
+  );
+}
+
 export default function MaterialsPage() {
   const [data, setData] = useState<LoaiTon[]>([]);
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<LoaiTon | null>(null);
   const [form] = Form.useForm();
@@ -22,6 +36,11 @@ export default function MaterialsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const filteredData = useMemo(
+    () => filterBySearch(data, search, getMaterialSearchText),
+    [data, search],
+  );
 
   const openModal = (item?: LoaiTon) => {
     setEditing(item ?? null);
@@ -53,9 +72,10 @@ export default function MaterialsPage() {
         </Button>
       }
     >
+      <TableSearchBar value={search} onChange={setSearch} />
       <Table
         rowKey="id"
-        dataSource={data}
+        dataSource={filteredData}
         columns={[
           { title: 'Thương hiệu', dataIndex: 'thuongHieu' },
           { title: 'Độ dày (mm)', dataIndex: 'doDay' },

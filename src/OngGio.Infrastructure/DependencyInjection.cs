@@ -6,6 +6,7 @@ using OngGio.Application.Abstractions;
 using OngGio.Application.Services;
 using OngGio.Domain.Entities;
 using OngGio.Infrastructure.Persistence;
+using OngGio.Infrastructure.Seed;
 using OngGio.Infrastructure.Security;
 using OngGio.Infrastructure.Services;
 
@@ -38,6 +39,7 @@ public static class DependencyInjection
         await SeedNhomSanPhamAsync(db);
         await SeedLoaiTonAsync(db);
         await SeedNguoiDungAsync(db);
+        await SampleBaoGiaSeeder.SeedAsync(serviceProvider);
     }
 
     private static async Task SeedNhomSanPhamAsync(OngGioDbContext db)
@@ -59,7 +61,7 @@ public static class DependencyInjection
             ("BZ (Ống lệch tâm)", "/images/bz.png", StandardProductFormulas.Bz,
                 ["W", "H", "L", "DO_LECH"]),
             ("Tê cụt", "/images/te-cut.png", StandardProductFormulas.TeCut,
-                ["W", "H", "Wmax", "r"]),
+                ["W", "H", "r"]),
             ("Tê rẽ", "/images/te-re.png", StandardProductFormulas.TeRe,
                 ["W", "H", "Wp", "L"]),
             ("Hộp chụp miệng gió thẳng", "/images/hop-plenum.png", StandardProductFormulas.HopPlenum,
