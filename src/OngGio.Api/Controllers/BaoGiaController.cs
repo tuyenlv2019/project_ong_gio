@@ -27,6 +27,20 @@ public class BaoGiaController : ControllerBase
         Ok(await _baoGiaService.GetAllAsync(ct));
 
     /// <summary>
+    /// Tìm dòng chi tiết báo giá đã lưu để chọn nhanh trên form đơn hàng.
+    /// </summary>
+    /// <param name="search">Từ khóa tìm kiếm.</param>
+    /// <param name="limit">Số dòng tối đa.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Danh sách dòng chi tiết gần đây.</returns>
+    [HttpGet("line-history")]
+    public async Task<IActionResult> GetLineHistory(
+        [FromQuery] string? search,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default) =>
+        Ok(await _baoGiaService.SearchLineHistoryAsync(search, limit, ct));
+
+    /// <summary>
     /// Lấy chi tiết một báo giá theo id.
     /// </summary>
     /// <param name="id">Mã báo giá.</param>

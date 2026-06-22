@@ -111,6 +111,28 @@ export interface CalculationResult {
   trangThaiCongThuc: string;
 }
 
+export interface BaoGiaLineHistory {
+  id: number;
+  tenSanPham: string;
+  maBaoGia: string;
+  tenKhachHang: string;
+  ngayTao: string;
+  nhomSanPhamId: number;
+  tenNhom: string;
+  loaiTonId: number;
+  loaiTonLabel: string;
+  w: number;
+  h: number;
+  thamSoNhapJson?: string | null;
+  soLuong: number;
+  donViTinh: string;
+  thueSuat: number;
+  giaNhanCong: number;
+  phuKien: number;
+  thanhTienTon: number;
+  ghiChu?: string | null;
+}
+
 export interface LineFormValues {
   tenSanPham?: string;
   donViTinh?: string;

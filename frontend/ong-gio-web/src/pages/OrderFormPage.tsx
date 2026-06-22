@@ -17,9 +17,10 @@ import {
   TRANG_THAI_DON,
   updateBaoGia,
 } from '../api';
-import type { CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
+import type { BaoGiaLineHistory, CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
 import { API_BASE } from '../types';
 import FormulaDisplay from '../components/FormulaDisplay';
+import LineHistoryPickerModal from '../components/LineHistoryPickerModal';
 import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
 
 const { Title, Text } = Typography;
@@ -211,6 +212,8 @@ export default function OrderFormPage() {
   const [loading, setLoading] = useState(false);
   const [selectedNhomRow, setSelectedNhomRow] = useState<NhomSanPham | undefined>(undefined);
   const [requiredHeaders, setRequiredHeaders] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLineIndex, setHistoryLineIndex] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -311,6 +314,35 @@ export default function OrderFormPage() {
       }
     }
     setLinePreviews(previews);
+  };
+
+  const openLineHistory = (lineIndex: number) => {
+    setHistoryLineIndex(lineIndex);
+    setHistoryOpen(true);
+  };
+
+  const applyHistoryLine = async (lineIndex: number, item: BaoGiaLineHistory) => {
+    const lines = [...(form.getFieldValue('lineInputs') || [])];
+    lines[lineIndex] = {
+      ...lines[lineIndex],
+      tenSanPham: item.tenSanPham,
+      nhomSanPhamId: item.nhomSanPhamId,
+      loaiTonId: item.loaiTonId,
+      w: item.w,
+      h: item.h,
+      thamSoNhap: item.thamSoNhapJson ? JSON.parse(item.thamSoNhapJson) : {},
+      soLuong: item.soLuong,
+      donViTinh: item.donViTinh ?? 'cái',
+      thueSuat: (item.thueSuat ?? 0.08) * 100,
+      giaNhanCong: item.giaNhanCong ?? 0,
+      phuKien: item.phuKien ?? 0,
+      ghiChu: item.ghiChu ?? undefined,
+      thanhTienTon: item.thanhTienTon,
+    };
+    form.setFieldsValue({ lineInputs: lines });
+    setHistoryOpen(false);
+    ensureNewRowIfNeeded({ lineInputs: lines });
+    await refreshPreviews({ lineInputs: lines });
   };
 
   /**
@@ -553,7 +585,16 @@ export default function OrderFormPage() {
                               : [{ required: true, message: 'Nhập tên sản phẩm' }]
                           }
                         >
-                          <Input placeholder="Nhập tên sản phẩm" />
+                          <Input
+                            placeholder="Nhập tên sản phẩm (F4: chọn từ đơn cũ)"
+                            onFocus={() => setHistoryLineIndex(field.name)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'F4') {
+                                event.preventDefault();
+                                openLineHistory(field.name);
+                              }
+                            }}
+                          />
                         </Form.Item>
                       </div>
                     </div>
@@ -973,6 +1014,21 @@ export default function OrderFormPage() {
           <Button onClick={() => navigate('/don-hang')}>Hủy</Button>
         </Space>
       </Form>
+
+      <LineHistoryPickerModal
+        open={historyOpen}
+        initialSearch={
+          historyLineIndex !== null
+            ? form.getFieldValue(['lineInputs', historyLineIndex, 'tenSanPham']) ?? ''
+            : ''
+        }
+        onClose={() => setHistoryOpen(false)}
+        onSelect={(item) => {
+          if (historyLineIndex !== null) {
+            void applyHistoryLine(historyLineIndex, item);
+          }
+        }}
+      />
     </div>
   );
 }   

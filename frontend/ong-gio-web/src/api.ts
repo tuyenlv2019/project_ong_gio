@@ -5,6 +5,7 @@ import axios from 'axios';
 import { API_BASE } from './types';
 import type {
   BaoGia,
+  BaoGiaLineHistory,
   CalculationRequest,
   CalculationResult,
   DashboardStats,
@@ -136,6 +137,16 @@ export async function getBaoGias(): Promise<BaoGia[]> {
  */
 export async function getBaoGia(id: number): Promise<BaoGia> {
   const { data } = await api.get<BaoGia>(`/api/bao-gia/${id}`);
+  return data;
+}
+
+/**
+ * Tìm dòng chi tiết báo giá đã lưu trước đó (F4 trên form đơn hàng).
+ */
+export async function getBaoGiaLineHistory(search?: string, limit = 100): Promise<BaoGiaLineHistory[]> {
+  const { data } = await api.get<BaoGiaLineHistory[]>('/api/bao-gia/line-history', {
+    params: { search: search?.trim() || undefined, limit },
+  });
   return data;
 }
 

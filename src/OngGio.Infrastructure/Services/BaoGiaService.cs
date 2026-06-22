@@ -332,4 +332,53 @@ public class BaoGiaService : IBaoGiaService
             "CHUA_XU_LY" or "DANG_XU_LY" or "HOAN_THANH" => trangThai,
             _ => "CHUA_XU_LY"
         };
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<BaoGiaLineHistoryDto>> SearchLineHistoryAsync(
+        string? search,
+        int limit = 100,
+        CancellationToken ct = default)
+    {
+        limit = Math.Clamp(limit, 1, 200);
+        var query = _db.ChiTietBaoGias
+            .AsNoTracking()
+            .Where(x => x.TenSanPham != null && x.TenSanPham.Trim() != "");
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = $"%{search.Trim()}%";
+            query = query.Where(x =>
+                EF.Functions.Like(x.TenSanPham!, term) ||
+                EF.Functions.Like(x.BaoGia.TenKhachHang, term) ||
+                EF.Functions.Like(x.BaoGia.MaBaoGia, term) ||
+                EF.Functions.Like(x.NhomSanPham.TenNhom, term) ||
+                (x.GhiChu != null && EF.Functions.Like(x.GhiChu, term)));
+        }
+
+        return await query
+            .OrderByDescending(x => x.UpdatedAt)
+            .ThenByDescending(x => x.Id)
+            .Take(limit)
+            .Select(x => new BaoGiaLineHistoryDto(
+                x.Id,
+                x.TenSanPham!,
+                x.BaoGia.MaBaoGia,
+                x.BaoGia.TenKhachHang,
+                x.BaoGia.NgayTao,
+                x.NhomSanPhamId,
+                x.NhomSanPham.TenNhom,
+                x.LoaiTonId,
+                x.LoaiTon.ThuongHieu + " " + x.LoaiTon.DoDay.ToString() + "mm",
+                x.WInput,
+                x.HInput,
+                x.ThamSoNhapJson,
+                x.SoLuong,
+                x.DonViTinh,
+                x.ThueSuat,
+                x.GiaNhanCong,
+                x.PhuKien,
+                x.ThanhTienTon,
+                x.GhiChu))
+            .ToListAsync(ct);
+    }
 }

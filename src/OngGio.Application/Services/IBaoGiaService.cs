@@ -61,11 +61,40 @@ public interface IBaoGiaService
     /// <summary>
     /// Xuất báo giá ra file Excel.
     /// </summary>
-    /// <param name="id">Mã báo giá.</param>
+    /// <param name="id">Mã báo gia.</param>
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Dữ liệu file Excel.</returns>
     Task<byte[]> ExportExcelAsync(int id, CancellationToken ct = default);
+    /// <summary>
+    /// Tìm các dòng chi tiết báo giá đã lưu trước đó để chọn nhanh trên form đơn hàng.
+    /// </summary>
+    /// <param name="search">Từ khóa tìm theo tên SP, đơn hàng, khách hàng, loại SP hoặc ghi chú.</param>
+    /// <param name="limit">Số dòng tối đa trả về.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Danh sách dòng chi tiết gần đây.</returns>
+    Task<IReadOnlyList<BaoGiaLineHistoryDto>> SearchLineHistoryAsync(string? search, int limit = 100, CancellationToken ct = default);
 }
+
+public record BaoGiaLineHistoryDto(
+    int Id,
+    string TenSanPham,
+    string MaBaoGia,
+    string TenKhachHang,
+    DateTime NgayTao,
+    int NhomSanPhamId,
+    string TenNhom,
+    int LoaiTonId,
+    string LoaiTonLabel,
+    decimal W,
+    decimal H,
+    string? ThamSoNhapJson,
+    int SoLuong,
+    string DonViTinh,
+    decimal ThueSuat,
+    decimal GiaNhanCong,
+    decimal PhuKien,
+    decimal ThanhTienTon,
+    string? GhiChu);
 
 public record CreateBaoGiaLineRequest(
     int NhomSanPhamId,
