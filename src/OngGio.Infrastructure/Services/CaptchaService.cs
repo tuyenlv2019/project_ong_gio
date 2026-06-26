@@ -1,6 +1,3 @@
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Caching.Memory;
@@ -9,7 +6,7 @@ using OngGio.Application.Abstractions;
 namespace OngGio.Infrastructure.Services;
 
 /// <summary>
-/// Service captcha: tạo ảnh, lưu đáp án tạm và xác thực một lần.
+/// Service captcha: tạo ảnh SVG, lưu đáp án tạm và xác thực một lần.
 /// </summary>
 public class CaptchaService : ICaptchaService
 {
@@ -19,36 +16,23 @@ public class CaptchaService : ICaptchaService
     private const int ImageWidth = 220;
     private const int ImageHeight = 72;
     private static readonly char[] CaptchaChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
-    private static readonly string[] FontFamilies = { "Arial", "Tahoma", "Verdana", "Times New Roman" };
 
     public CaptchaService(IMemoryCache cache)
     {
         _cache = cache;
     }
 
-    /// <summary>
-    /// Tạo captcha mới và lưu đáp án vào cache tạm thời.
-    /// </summary>
-    /// <param name="ct">Cancellation token của request.</param>
-    /// <returns>Token captcha và ảnh base64.</returns>
     public Task<CaptchaChallenge> CreateCaptchaAsync(CancellationToken ct = default)
     {
         var text = GenerateCaptchaText(CaptchaLength);
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        var imageBase64 = CreateCaptchaImageBase64(text);
+        var imageBase64 = CreateCaptchaSvgBase64(text);
 
         _cache.Set(GetCacheKey(token), text, TimeSpan.FromMinutes(ExpirationMinutes));
 
         return Task.FromResult(new CaptchaChallenge(token, imageBase64));
     }
 
-    /// <summary>
-    /// Kiểm tra câu trả lời captcha theo token.
-    /// </summary>
-    /// <param name="token">Token captcha.</param>
-    /// <param name="answer">Câu trả lời người dùng nhập.</param>
-    /// <param name="ct">Cancellation token của request.</param>
-    /// <returns>True nếu captcha hợp lệ.</returns>
     public Task<bool> ValidateCaptchaAsync(string token, string answer, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(answer))
@@ -73,55 +57,40 @@ public class CaptchaService : ICaptchaService
         return builder.ToString();
     }
 
-    private static string CreateCaptchaImageBase64(string text)
+    private static string CreateCaptchaSvgBase64(string text)
     {
-        using var bitmap = new Bitmap(ImageWidth, ImageHeight);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        graphics.Clear(Color.White);
+        var svg = new StringBuilder();
+        svg.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{ImageWidth}\" height=\"{ImageHeight}\" viewBox=\"0 0 {ImageWidth} {ImageHeight}\">");
+        svg.Append("<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>");
 
-        DrawNoise(graphics, bitmap);
-        DrawCaptchaText(graphics, text);
-        DrawNoise(graphics, bitmap);
-
-        using var ms = new MemoryStream();
-        bitmap.Save(ms, ImageFormat.Png);
-        return Convert.ToBase64String(ms.ToArray());
-    }
-
-    private static void DrawCaptchaText(Graphics graphics, string text)
-    {
-        var randomFont = FontFamilies[RandomNumberGenerator.GetInt32(FontFamilies.Length)];
-        using var font = new Font(randomFont, 36, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var brush = new SolidBrush(Color.FromArgb(30, 80, 120));
-
-        var charX = 10;
-        foreach (var c in text)
-        {
-            var yOffset = RandomNumberGenerator.GetInt32(0, 16);
-            graphics.DrawString(c.ToString(), font, brush, new PointF(charX, yOffset + 10));
-            charX += 36;
-        }
-    }
-
-    private static void DrawNoise(Graphics graphics, Bitmap bitmap)
-    {
-        using var pen = new Pen(Color.LightGray, 1);
         for (var i = 0; i < 4; i++)
         {
             var x1 = RandomNumberGenerator.GetInt32(0, ImageWidth);
             var y1 = RandomNumberGenerator.GetInt32(0, ImageHeight);
             var x2 = RandomNumberGenerator.GetInt32(0, ImageWidth);
             var y2 = RandomNumberGenerator.GetInt32(0, ImageHeight);
-            graphics.DrawLine(pen, x1, y1, x2, y2);
+            svg.Append($"<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"#d0d0d0\" stroke-width=\"1\"/>");
         }
 
-        for (var i = 0; i < 120; i++)
+        for (var i = 0; i < 80; i++)
         {
             var x = RandomNumberGenerator.GetInt32(0, ImageWidth);
             var y = RandomNumberGenerator.GetInt32(0, ImageHeight);
-            bitmap.SetPixel(x, y, Color.LightGray);
+            svg.Append($"<circle cx=\"{x}\" cy=\"{y}\" r=\"1\" fill=\"#d8d8d8\"/>");
         }
+
+        var charX = 14;
+        foreach (var c in text)
+        {
+            var y = 18 + RandomNumberGenerator.GetInt32(0, 16);
+            var rotate = RandomNumberGenerator.GetInt32(-18, 18);
+            svg.Append(
+                $"<text x=\"{charX}\" y=\"{y + 28}\" fill=\"#1e5078\" font-family=\"Arial,sans-serif\" font-size=\"34\" font-weight=\"700\" transform=\"rotate({rotate} {charX} {y + 28})\">{c}</text>");
+            charX += 38;
+        }
+
+        svg.Append("</svg>");
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(svg.ToString()));
     }
 
     private static string GetCacheKey(string token) => $"captcha:{token}";

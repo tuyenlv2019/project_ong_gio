@@ -144,7 +144,6 @@ export default function OrdersPage() {
           {
             title: 'Thao tác',
             width: 200,
-            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />

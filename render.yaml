@@ -1,0 +1,25 @@
+# Blueprint Render.com — deploy cả app + PostgreSQL
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: ong-gio-db
+    plan: free
+    databaseName: ong_gio_db
+    user: ong_gio_user
+
+services:
+  - type: web
+    name: ong-gio
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: ong-gio-db
+          property: connectionString
+      - key: JwtSettings__SecretKey
+        generateValue: true

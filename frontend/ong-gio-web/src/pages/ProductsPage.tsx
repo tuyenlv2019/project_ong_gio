@@ -136,7 +136,6 @@ export default function ProductsPage() {
           {
             title: 'Thao tác',
             width: 120,
-            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />

@@ -133,18 +133,3 @@ body {
 .brand-list-table .ant-table-tbody > tr:hover > td {
   background: rgba(0, 194, 255, 0.12) !important;
 }
-
-.brand-list-table .ant-table-tbody > tr:nth-child(odd) > td.ant-table-cell-fix-left,
-.brand-list-table .ant-table-tbody > tr:nth-child(odd) > td.ant-table-cell-fix-right {
-  background: #fff;
-}
-
-.brand-list-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left,
-.brand-list-table .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-right {
-  background: rgba(0, 86, 179, 0.05);
-}
-
-.brand-list-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
-.brand-list-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
-  background: rgba(0, 194, 255, 0.12) !important;
-}

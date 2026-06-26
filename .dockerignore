@@ -1,0 +1,13 @@
+**/.git
+**/.vs
+**/.vscode
+**/.idea
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/*.user
+**/*.suo
+**/tests
+frontend/ong-gio-web/node_modules
+frontend/ong-gio-web/dist

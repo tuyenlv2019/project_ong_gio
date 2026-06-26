@@ -98,7 +98,6 @@ export default function MaterialsPage() {
           {
             title: 'Thao tác',
             width: 100,
-            fixed: 'right' as const,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />

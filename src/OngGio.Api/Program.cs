@@ -69,9 +69,20 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseDefaultFiles();
+}
+
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.MapFallbackToFile("index.html");
+}
 
 app.Run();

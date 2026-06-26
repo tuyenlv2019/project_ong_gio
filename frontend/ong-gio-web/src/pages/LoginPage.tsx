@@ -132,7 +132,7 @@ export default function LoginPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {captchaImageBase64 && (
                   <img
-                    src={`data:image/png;base64,${captchaImageBase64}`}
+                    src={`data:image/svg+xml;base64,${captchaImageBase64}`}
                     alt="Captcha"
                     style={{ width: '100%', height: 'auto', borderRadius: 4, border: '1px solid #d9d9d9' }}
                   />
