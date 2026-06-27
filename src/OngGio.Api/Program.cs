@@ -7,8 +7,8 @@ using OngGio.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+var connectionString = PostgresConnectionStringNormalizer.Normalize(
+    builder.Configuration.GetConnectionString("DefaultConnection"));
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
