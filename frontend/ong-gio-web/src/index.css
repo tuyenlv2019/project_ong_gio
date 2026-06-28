@@ -202,3 +202,22 @@ body {
 .order-product-table .ant-table-sticky-holder {
   z-index: 5;
 }
+
+body.order-line-history-open {
+  overflow: hidden !important;
+}
+
+body.order-line-history-open .order-form-sticky-header,
+body.order-line-history-open .order-product-table .ant-table-sticky-holder {
+  visibility: hidden !important;
+}
+
+.line-history-picker-modal .line-history-table-wrap {
+  overflow: auto;
+  max-width: 100%;
+  background: #fff;
+}
+
+.line-history-picker-modal .line-history-table .ant-table-content > table {
+  min-width: 1006px;
+}

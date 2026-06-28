@@ -8,6 +8,8 @@ import type { BaoGiaLineHistory } from '../types';
 
 const { Text } = Typography;
 
+const LINE_HISTORY_TABLE_SCROLL_X = 1006;
+
 type LineHistoryPickerModalProps = {
   open: boolean;
   initialSearch?: string;
@@ -48,6 +50,15 @@ export default function LineHistoryPickerModal({
   const [rows, setRows] = useState<BaoGiaLineHistory[]>([]);
 
   useEffect(() => {
+    if (!open) return undefined;
+
+    document.body.classList.add('order-line-history-open');
+    return () => {
+      document.body.classList.remove('order-line-history-open');
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     setSearch(initialSearch);
   }, [open, initialSearch]);
@@ -76,8 +87,14 @@ export default function LineHistoryPickerModal({
       open={open}
       onCancel={onClose}
       footer={null}
-      width={980}
+      width={1060}
       destroyOnClose
+      className="line-history-picker-modal"
+      styles={{
+        body: {
+          overflow: 'hidden',
+        },
+      }}
     >
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
         Nhấn F4 tại ô Tên sản phẩm để mở hộp thoại này. Chọn một dòng để điền nhanh thông tin.
@@ -91,18 +108,21 @@ export default function LineHistoryPickerModal({
         onChange={(event) => setSearch(event.target.value)}
         style={{ marginBottom: 16 }}
       />
-      <Table
-        size="small"
-        rowKey="id"
-        loading={loading}
-        dataSource={rows}
-        pagination={{ pageSize: 8, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => onSelect(record),
-          onDoubleClick: () => onSelect(record),
-          style: { cursor: 'pointer' },
-        })}
-        columns={[
+      <div className="line-history-table-wrap">
+        <Table
+          className="line-history-table"
+          size="small"
+          rowKey="id"
+          loading={loading}
+          dataSource={rows}
+          pagination={{ pageSize: 8, showSizeChanger: false }}
+          scroll={{ x: LINE_HISTORY_TABLE_SCROLL_X }}
+          onRow={(record) => ({
+            onClick: () => onSelect(record),
+            onDoubleClick: () => onSelect(record),
+            style: { cursor: 'pointer' },
+          })}
+          columns={[
           { title: 'Tên sản phẩm', dataIndex: 'tenSanPham', width: 180, ellipsis: true, render: renderEllipsisCell },
           { title: 'Loại SP', dataIndex: 'tenNhom', width: 140, ellipsis: true, render: renderEllipsisCell },
           {
@@ -122,7 +142,8 @@ export default function LineHistoryPickerModal({
             render: (value: string) => formatDate(value),
           },
         ]}
-      />
+        />
+      </div>
     </Modal>
   );
 }
