@@ -158,7 +158,24 @@ public class BaoGiaService : IBaoGiaService
     public async Task<IReadOnlyList<BaoGia>> GetAllAsync(CancellationToken ct = default)
     {
         return await _db.BaoGias
+            .AsNoTracking()
             .OrderByDescending(x => x.NgayTao)
+            .Select(x => new BaoGia
+            {
+                Id = x.Id,
+                MaBaoGia = x.MaBaoGia,
+                TenKhachHang = x.TenKhachHang,
+                NgayTao = x.NgayTao,
+                ThueSuat = x.ThueSuat,
+                TongTienTruocThue = x.TongTienTruocThue,
+                TongTienSauThue = x.TongTienSauThue,
+                TrangThai = x.TrangThai,
+                CreatedBy = x.CreatedBy,
+                CreatedAt = x.CreatedAt,
+                UpdatedBy = x.UpdatedBy,
+                UpdatedAt = x.UpdatedAt,
+                TongSoSanPham = x.ChiTietBaoGias.Sum(c => c.SoLuong),
+            })
             .ToListAsync(ct);
     }
 
@@ -381,11 +398,7 @@ public class BaoGiaService : IBaoGiaService
     }
 
     private static string NormalizeTrangThai(string? trangThai) =>
-        trangThai switch
-        {
-            "CHUA_XU_LY" or "DANG_XU_LY" or "HOAN_THANH" => trangThai,
-            _ => "CHUA_XU_LY"
-        };
+        OrderStatusNormalizer.Normalize(trangThai);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<BaoGiaLineHistoryDto>> SearchLineHistoryAsync(

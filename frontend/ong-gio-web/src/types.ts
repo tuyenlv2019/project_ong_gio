@@ -48,6 +48,7 @@ export interface BaoGia {
   tongTienTruocThue: number;
   tongTienSauThue: number;
   trangThai: string;
+  tongSoSanPham?: number;
   chiTietBaoGias?: ChiTietBaoGia[];
 }
 
@@ -87,6 +88,7 @@ export interface NguoiDung {
 
 export interface DashboardStats {
   tongDonHang: number;
+  donHangChuaXuLy: number;
   donHangDangXuLy: number;
   donHangHoanThanh: number;
   tongTienNguyenLieu: number;

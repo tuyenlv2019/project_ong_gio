@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using OngGio.Application.Abstractions;
+using OngGio.Infrastructure.Persistence;
 
 namespace OngGio.Api.Controllers;
 
@@ -12,11 +15,13 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly ICaptchaService _captchaService;
+    private readonly OngGioDbContext _db;
 
-    public AuthController(IAuthService authService, ICaptchaService captchaService)
+    public AuthController(IAuthService authService, ICaptchaService captchaService, OngGioDbContext db)
     {
         _authService = authService;
         _captchaService = captchaService;
+        _db = db;
     }
 
     /// <summary>
@@ -67,6 +72,53 @@ public class AuthController : ControllerBase
             }
         });
     }
+
+    /// <summary>
+    /// Đổi mật khẩu cho user đang đăng nhập.
+    /// </summary>
+    /// <param name="request">Mật khẩu cũ và mật khẩu mới.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Thông báo kết quả.</returns>
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.MatKhauCu) || string.IsNullOrWhiteSpace(request.MatKhauMoi))
+            return BadRequest(new { message = "Vui lòng nhập đầy đủ mật khẩu" });
+
+        if (request.MatKhauMoi != request.XacNhanMatKhauMoi)
+            return BadRequest(new { message = "Mật khẩu xác nhận không khớp" });
+
+        var userId = await ResolveUserIdForPasswordChangeAsync(request.TenDangNhap, ct);
+        if (userId is null)
+            return BadRequest(new { message = "Không xác định được tài khoản. Vui lòng đăng nhập lại." });
+
+        var result = await _authService.ChangePasswordAsync(userId.Value, request.MatKhauCu, request.MatKhauMoi, ct);
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(new { success = true, message = result.Message });
+    }
+
+    private async Task<int?> ResolveUserIdForPasswordChangeAsync(string? tenDangNhap, CancellationToken ct)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var claimValue = User.FindFirst("id")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(claimValue, out var userIdFromToken))
+                return userIdFromToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(tenDangNhap))
+            return null;
+
+        var user = await _db.NguoiDungs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TenDangNhap == tenDangNhap.Trim(), ct);
+
+        return user?.Id;
+    }
 }
 
 public record LoginRequest(string TenDangNhap, string MatKhau, string CaptchaToken, string CaptchaValue);
+
+public record ChangePasswordRequest(string? TenDangNhap, string MatKhauCu, string MatKhauMoi, string XacNhanMatKhauMoi);

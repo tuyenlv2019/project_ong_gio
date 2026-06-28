@@ -8,21 +8,24 @@ import {
   AppstoreOutlined,
   UserOutlined,
   LogoutOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import { Layout, Menu, Typography, Button, Space, Dropdown } from 'antd';
+import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 import { authService } from '../authService';
 import './MainLayout.css';
 
 const { Header, Sider, Content } = Layout;
 
-const menuItems = [
+const allMenuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/don-hang', icon: <FileTextOutlined />, label: 'Quản lý đơn hàng' },
   { key: '/nguyen-lieu', icon: <GoldOutlined />, label: 'Quản lý nguyên liệu' },
   { key: '/san-pham', icon: <AppstoreOutlined />, label: 'Quản lý sản phẩm' },
-  { key: '/nguoi-dung', icon: <UserOutlined />, label: 'Quản lý user' },
-];
+  { key: '/nguoi-dung', icon: <UserOutlined />, label: 'Quản lý user', adminOnly: true },
+] as const;
 
 /**
  * Layout ứng dụng sau khi đăng nhập.
@@ -32,6 +35,10 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = authService.getUser();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const menuItems = allMenuItems
+    .filter((item) => !('adminOnly' in item && item.adminOnly) || authService.isAdmin())
+    .map(({ key, icon, label }) => ({ key, icon, label }));
 
   const handleLogout = () => {
     authService.logout();
@@ -39,6 +46,12 @@ export default function MainLayout() {
   };
 
   const userMenu = [
+    {
+      key: 'change-password',
+      icon: <KeyOutlined />,
+      label: 'Đổi mật khẩu',
+      onClick: () => setChangePasswordOpen(true),
+    },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
@@ -82,6 +95,14 @@ export default function MainLayout() {
           <Outlet />
         </Content>
       </Layout>
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        onSuccess={() => {
+          authService.logout();
+          navigate('/login');
+        }}
+      />
     </Layout>
   );
 }

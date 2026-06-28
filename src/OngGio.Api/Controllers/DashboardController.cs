@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OngGio.Application.Services;
@@ -32,6 +33,7 @@ public class DashboardController : ControllerBase
 /// <summary>
 /// Controller quản lý người dùng nội bộ của hệ thống.
 /// </summary>
+[Authorize(Policy = "AdminOnly")]
 [ApiController]
 [Route("api/nguoi-dung")]
 public class NguoiDungController : ControllerBase
@@ -113,6 +115,31 @@ public class NguoiDungController : ControllerBase
         await _db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    /// <summary>
+    /// Admin đặt lại mật khẩu cho user khác.
+    /// </summary>
+    /// <param name="id">Mã user cần reset mật khẩu.</param>
+    /// <param name="request">Mật khẩu mới.</param>
+    /// <param name="ct">Cancellation token của request.</param>
+    /// <returns>Thông báo kết quả.</returns>
+    [HttpPatch("{id:int}/reset-password")]
+    public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.MatKhauMoi) || request.MatKhauMoi.Length < 6)
+            return BadRequest(new { message = "Mật khẩu mới phải có ít nhất 6 ký tự" });
+
+        if (request.MatKhauMoi != request.XacNhanMatKhauMoi)
+            return BadRequest(new { message = "Mật khẩu xác nhận không khớp" });
+
+        var user = await _db.NguoiDungs.FindAsync([id], ct);
+        if (user is null) return NotFound();
+
+        user.MatKhauHash = PasswordHasher.Hash(request.MatKhauMoi);
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, message = $"Đã reset mật khẩu cho {user.TenDangNhap}" });
+    }
 }
 
 public record NguoiDungRequest(
@@ -121,3 +148,5 @@ public record NguoiDungRequest(
     string? MatKhau,
     string? VaiTro,
     bool DangHoatDong = true);
+
+public record ResetPasswordRequest(string MatKhauMoi, string XacNhanMatKhauMoi);

@@ -279,6 +279,22 @@ export async function deleteNguoiDung(id: number) {
 }
 
 /**
+ * Admin reset mật khẩu user.
+ * @param id Mã user.
+ * @param payload Mật khẩu mới.
+ */
+export async function resetNguoiDungPassword(
+  id: number,
+  payload: { matKhauMoi: string; xacNhanMatKhauMoi: string },
+) {
+  const { data } = await api.patch<{ success: boolean; message?: string }>(
+    `/api/nguoi-dung/${id}/reset-password`,
+    payload,
+  );
+  return data;
+}
+
+/**
  * Định dạng số tiền — làm tròn số nguyên, ngăn cách hàng nghìn bằng dấu phẩy.
  * @param value Giá trị cần định dạng.
  * @returns Chuỗi tiền tệ đã làm tròn.

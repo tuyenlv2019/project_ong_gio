@@ -97,7 +97,7 @@ export default function MaterialsPage() {
           ...createAuditColumns<LoaiTon>(),
           {
             title: 'Thao tác',
-            width: 100,
+            width: 50,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />

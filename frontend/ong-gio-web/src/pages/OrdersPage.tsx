@@ -56,6 +56,7 @@ function getOrderSearchText(row: BaoGia) {
     formatMoney(row.tongTienTruocThue),
     row.tongTienSauThue,
     row.tongTienTruocThue,
+    row.tongSoSanPham,
     ...getAuditSearchText(row),
   );
 }
@@ -111,7 +112,7 @@ export default function OrdersPage() {
         rowKey="id"
         loading={loading}
         dataSource={filteredData}
-        scroll={{ x: 1380 }}
+        scroll={{ x: 1480 }}
         columns={[
           createSttColumn<BaoGia>(),
           { title: 'Mã Báo Giá', dataIndex: 'maBaoGia', width: 130, ellipsis: true, render: renderEllipsisCell },
@@ -131,6 +132,13 @@ export default function OrdersPage() {
             ),
           },
           {
+            title: 'Tổng SP',
+            dataIndex: 'tongSoSanPham',
+            width: 90,
+            align: 'center' as const,
+            render: (v: number | undefined) => v ?? 0,
+          },
+          {
             title: 'Tổng tiền',
             dataIndex: 'tongTienSauThue',
             width: 140,
@@ -143,7 +151,7 @@ export default function OrdersPage() {
           }),
           {
             title: 'Thao tác',
-            width: 200,
+            width: 100,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />

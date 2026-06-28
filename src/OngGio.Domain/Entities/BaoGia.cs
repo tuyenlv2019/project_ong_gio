@@ -1,4 +1,5 @@
 // Entity báo giá gốc, chứa thông tin khách hàng, thuế và tổng tiền.
+using System.ComponentModel.DataAnnotations.Schema;
 using OngGio.Domain.Common;
 
 namespace OngGio.Domain.Entities;
@@ -13,6 +14,9 @@ public class BaoGia : AuditableEntity
     public decimal TongTienTruocThue { get; set; }
     public decimal TongTienSauThue { get; set; }
     public string TrangThai { get; set; } = "CHUA_XU_LY";
+
+    [NotMapped]
+    public int TongSoSanPham { get; set; }
 
     public ICollection<ChiTietBaoGia> ChiTietBaoGias { get; set; } = [];
 }

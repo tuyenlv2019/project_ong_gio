@@ -1,11 +1,6 @@
-# Blueprint Render.com — deploy cả app + PostgreSQL
+# Blueprint Render.com — chỉ deploy Web Service (Docker)
+# Database dùng bên ngoài (khuyên dùng Neon — free, không bị sleep như Web Service)
 # Docs: https://render.com/docs/blueprint-spec
-
-databases:
-  - name: ong-gio-db
-    plan: free
-    databaseName: ong_gio_db
-    user: ong_gio_user
 
 services:
   - type: web
@@ -17,9 +12,8 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      # Dán connection string từ Neon/ElephantSQL vào Render Dashboard sau khi deploy
       - key: ConnectionStrings__DefaultConnection
-        fromDatabase:
-          name: ong-gio-db
-          property: connectionString
+        sync: false
       - key: JwtSettings__SecretKey
         generateValue: true

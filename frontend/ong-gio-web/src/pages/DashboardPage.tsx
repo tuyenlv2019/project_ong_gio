@@ -5,6 +5,7 @@ import { Card, Col, Row, Statistic, Button, Space } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatMoney, getDashboardStats } from '../api';
+import { authService } from '../authService';
 import type { DashboardStats } from '../types';
 
 export default function DashboardPage() {
@@ -12,7 +13,10 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    getDashboardStats().then(setStats).catch(() => setStats(null));
+    const load = () => getDashboardStats().then(setStats).catch(() => setStats(null));
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
   }, []);
 
   if (!stats) return <Card loading />;
@@ -25,13 +29,20 @@ export default function DashboardPage() {
         </Button>
         <Button onClick={() => navigate('/nguyen-lieu', { state: { openCreate: true } })}>+ Thêm nguyên liệu</Button>
         <Button onClick={() => navigate('/san-pham', { state: { openCreate: true } })}>+ Thêm sản phẩm</Button>
-        <Button onClick={() => navigate('/nguoi-dung', { state: { openCreate: true } })}>+ Thêm user</Button>
+        {authService.isAdmin() && (
+          <Button onClick={() => navigate('/nguoi-dung', { state: { openCreate: true } })}>+ Thêm user</Button>
+        )}
       </Space>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic title="Tổng đơn hàng" value={stats.tongDonHang} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic title="Chưa xử lý" value={stats.donHangChuaXuLy} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -46,7 +57,7 @@ export default function DashboardPage() {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="Tổng doanh thu" value={formatMoney(stats.tongDoanhThu)} suffix="đ" />
+            <Statistic title="Doanh thu (hoàn thành)" value={formatMoney(stats.tongDoanhThu)} suffix="đ" />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8}>

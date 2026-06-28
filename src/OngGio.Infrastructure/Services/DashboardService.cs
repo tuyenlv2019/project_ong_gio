@@ -20,15 +20,27 @@ public class DashboardService
     /// <returns>Dữ liệu thống kê dashboard.</returns>
     public async Task<DashboardStats> GetStatsAsync(CancellationToken ct = default)
     {
-        var orders = await _db.BaoGias.AsNoTracking().ToListAsync(ct);
+        var orders = await _db.BaoGias
+            .AsNoTracking()
+            .Select(x => new { x.TrangThai, x.TongTienSauThue })
+            .ToListAsync(ct);
+
+        var normalizedOrders = orders
+            .Select(x => (Status: OrderStatusNormalizer.Normalize(x.TrangThai), x.TongTienSauThue))
+            .ToList();
+
         var materialTotal = await _db.ChiTietBaoGias.AsNoTracking().SumAsync(x => x.ThanhTienTon, ct);
+        var revenueTotal = normalizedOrders
+            .Where(x => x.Status == OrderStatusNormalizer.HoanThanh)
+            .Sum(x => x.TongTienSauThue);
 
         return new DashboardStats(
-            orders.Count,
-            orders.Count(x => x.TrangThai == "DANG_XU_LY"),
-            orders.Count(x => x.TrangThai == "HOAN_THANH"),
+            normalizedOrders.Count,
+            normalizedOrders.Count(x => x.Status == OrderStatusNormalizer.ChuaXuLy),
+            normalizedOrders.Count(x => x.Status == OrderStatusNormalizer.DangXuLy),
+            normalizedOrders.Count(x => x.Status == OrderStatusNormalizer.HoanThanh),
             materialTotal,
-            orders.Sum(x => x.TongTienSauThue),
+            revenueTotal,
             await _db.NhomSanPhams.CountAsync(ct),
             await _db.LoaiTons.CountAsync(ct),
             await _db.NguoiDungs.CountAsync(ct));

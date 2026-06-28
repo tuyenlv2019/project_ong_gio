@@ -1,9 +1,10 @@
-# Ignore build output
+# Build output
 **/bin/
 **/obj/
 
 # Visual Studio
 .vs/
+**/.vs/
 *.user
 *.suo
 
@@ -16,3 +17,17 @@
 # Uploaded product images (giữ thư mục qua .gitkeep)
 **/wwwroot/images/uploads/*
 !**/wwwroot/images/uploads/.gitkeep
+
+# Neon connection (mat khau)
+scripts/neon.connection.ps1
+
+# SQL backup local
+scripts/backups/*.sql
+scripts/backups/*.dump
+
+# Node
+**/node_modules/
+**/dist/
+
+# VS Code (tùy chọn — bỏ comment nếu muốn commit)
+# .vscode/

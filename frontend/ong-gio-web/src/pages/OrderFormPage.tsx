@@ -912,7 +912,7 @@ export default function OrderFormPage() {
                 {
                   title: 'Thao tác',
                   dataIndex: 'action',
-                  width: 96,
+                  width: 48,
                   align: 'center' as const,
                   render: (_: any, field: any, index: number) => {
                     const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];

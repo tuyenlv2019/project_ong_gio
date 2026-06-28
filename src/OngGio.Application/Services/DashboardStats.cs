@@ -3,6 +3,7 @@ namespace OngGio.Application.Services;
 
 public record DashboardStats(
     int TongDonHang,
+    int DonHangChuaXuLy,
     int DonHangDangXuLy,
     int DonHangHoanThanh,
     decimal TongTienNguyenLieu,

@@ -135,7 +135,7 @@ export default function ProductsPage() {
           ...createAuditColumns<NhomSanPham>(),
           {
             title: 'Thao tác',
-            width: 120,
+            width: 60,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
@@ -212,17 +212,17 @@ export default function ProductsPage() {
                 <div style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)', fontSize: 13 }}>
                   Mỗi tham số phải khác nhau (không trùng tên, không trùng ô W/H — ví dụ không thêm cả W và Wmax).
                 </div>
-                {fields.map((field) => (
-                  <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Space key={key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
                     <Form.Item
-                      {...field}
-                      name={[field.name, 'tenThamSo']}
+                      {...restField}
+                      name={[name, 'tenThamSo']}
                       rules={[{ required: true, message: 'Nhập tên tham số' }]}
                       style={{ flex: 1, marginBottom: 0 }}
                     >
                       <HintInput placeholder="W, H, L, R, r..." style={{ width: 280 }} />
                     </Form.Item>
-                    <Button danger onClick={() => remove(field.name)}>
+                    <Button danger onClick={() => remove(name)}>
                       Xóa
                     </Button>
                   </Space>

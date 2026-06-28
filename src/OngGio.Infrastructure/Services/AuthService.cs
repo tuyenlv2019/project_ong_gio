@@ -56,6 +56,35 @@ public class AuthService : IAuthService
         );
     }
 
+    /// <inheritdoc />
+    public async Task<AuthResult> ChangePasswordAsync(
+        int userId,
+        string matKhauCu,
+        string matKhauMoi,
+        CancellationToken ct = default)
+    {
+        var user = await _db.NguoiDungs.FindAsync([userId], ct);
+        if (user is null)
+            return new AuthResult(false, "Không tìm thấy tài khoản", null, null, null, null, null);
+
+        if (!user.DangHoatDong)
+            return new AuthResult(false, "Tài khoản bị khóa", null, null, null, null, null);
+
+        if (!PasswordHasher.Verify(matKhauCu, user.MatKhauHash))
+            return new AuthResult(false, "Mật khẩu hiện tại không chính xác", null, null, null, null, null);
+
+        if (string.IsNullOrWhiteSpace(matKhauMoi) || matKhauMoi.Length < 6)
+            return new AuthResult(false, "Mật khẩu mới phải có ít nhất 6 ký tự", null, null, null, null, null);
+
+        if (PasswordHasher.Verify(matKhauMoi, user.MatKhauHash))
+            return new AuthResult(false, "Mật khẩu mới phải khác mật khẩu hiện tại", null, null, null, null, null);
+
+        user.MatKhauHash = PasswordHasher.Hash(matKhauMoi);
+        await _db.SaveChangesAsync(ct);
+
+        return new AuthResult(true, "Đổi mật khẩu thành công", user.Id, null, user.TenDangNhap, user.HoTen, user.VaiTro);
+    }
+
     /// <summary>
     /// Sinh JWT token chứa thông tin cơ bản của user.
     /// </summary>
@@ -69,6 +98,7 @@ public class AuthService : IAuthService
 
         var claims = new[]
         {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim("id", user.Id.ToString()),
             new Claim("tenDangNhap", user.TenDangNhap),
             new Claim("hoTen", user.HoTen),

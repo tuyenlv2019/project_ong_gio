@@ -1,12 +1,13 @@
 /**
  * Trang quản lý người dùng nội bộ và phân quyền.
  */
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import { createNguoiDung, deleteNguoiDung, getNguoiDungs, updateNguoiDung } from '../api';
+import { createNguoiDung, deleteNguoiDung, getNguoiDungs, resetNguoiDungPassword, updateNguoiDung } from '../api';
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
+import { authService } from '../authService';
 import type { NguoiDung } from '../types';
 import { createSttColumn } from '../utils/tableColumns';
 import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
@@ -28,8 +29,12 @@ export default function UsersPage() {
   const [data, setData] = useState<NguoiDung[]>([]);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [editing, setEditing] = useState<NguoiDung | null>(null);
+  const [resettingUser, setResettingUser] = useState<NguoiDung | null>(null);
   const [form] = Form.useForm();
+  const [resetForm] = Form.useForm<{ matKhauMoi: string; xacNhanMatKhauMoi: string }>();
+  const isAdmin = authService.isAdmin();
 
   const load = async () => setData(await getNguoiDungs());
   useEffect(() => {
@@ -66,6 +71,25 @@ export default function UsersPage() {
     load();
   };
 
+  const openResetModal = (item: NguoiDung) => {
+    setResettingUser(item);
+    resetForm.resetFields();
+    setResetOpen(true);
+  };
+
+  const onResetPassword = async () => {
+    if (!resettingUser) return;
+    const values = await resetForm.validateFields();
+    try {
+      const result = await resetNguoiDungPassword(resettingUser.id, values);
+      message.success(result.message || 'Đã reset mật khẩu');
+      setResetOpen(false);
+      setResettingUser(null);
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Reset mật khẩu thất bại');
+    }
+  };
+
   return (
     <Card
       title="Quản lý user"
@@ -100,10 +124,18 @@ export default function UsersPage() {
           ...createAuditColumns<NguoiDung>(),
           {
             title: 'Thao tác',
-            width: 100,
+            width: isAdmin ? 70 : 50,
             render: (_, row) => (
               <Space>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
+                {isAdmin && (
+                  <Button
+                    size="small"
+                    icon={<KeyOutlined />}
+                    title="Reset mật khẩu"
+                    onClick={() => openResetModal(row)}
+                  />
+                )}
                 <Popconfirm
                   title="Xóa user?"
                   onConfirm={async () => {
@@ -140,6 +172,50 @@ export default function UsersPage() {
           </Form.Item>
           <Form.Item name="dangHoatDong" label="Hoạt động" valuePropName="checked">
             <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={resettingUser ? `Reset mật khẩu — ${resettingUser.tenDangNhap}` : 'Reset mật khẩu'}
+        open={resetOpen}
+        onOk={onResetPassword}
+        onCancel={() => {
+          setResetOpen(false);
+          setResettingUser(null);
+        }}
+        okText="Reset"
+        cancelText="Hủy"
+        destroyOnHidden
+      >
+        <Form form={resetForm} layout="vertical">
+          <Form.Item
+            name="matKhauMoi"
+            label="Mật khẩu mới"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mật khẩu mới' },
+              { min: 6, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' },
+            ]}
+          >
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="xacNhanMatKhauMoi"
+            label="Xác nhận mật khẩu mới"
+            dependencies={['matKhauMoi']}
+            rules={[
+              { required: true, message: 'Vui lòng xác nhận mật khẩu mới' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('matKhauMoi') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Mật khẩu xác nhận không khớp'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password autoComplete="new-password" />
           </Form.Item>
         </Form>
       </Modal>

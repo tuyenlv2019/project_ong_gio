@@ -11,6 +11,7 @@ import ProductsPage from './pages/ProductsPage';
 import UsersPage from './pages/UsersPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 
 /**
  * Component router gốc của ứng dụng web.
@@ -28,7 +29,7 @@ export default function App() {
           <Route path="don-hang/:id" element={<OrderFormPage />} />
           <Route path="nguyen-lieu" element={<MaterialsPage />} />
           <Route path="san-pham" element={<ProductsPage />} />
-          <Route path="nguoi-dung" element={<UsersPage />} />
+          <Route path="nguoi-dung" element={<AdminRoute><UsersPage /></AdminRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

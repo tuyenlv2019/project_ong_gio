@@ -1,7 +1,10 @@
 // File khởi động của API: cấu hình DI, JWT, CORS, Swagger và seed dữ liệu.
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using OngGio.Api;
 using OngGio.Application;
 using OngGio.Infrastructure;
 
@@ -17,7 +20,7 @@ builder.Services.AddInfrastructure(connectionString);
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!);
 
-builder.Services.AddAuthentication("Bearer")
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
@@ -30,9 +33,17 @@ builder.Services.AddAuthentication("Bearer")
             ValidateAudience = true,
             ValidAudience = jwtSettings["Audience"],
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.FromMinutes(1),
+            NameClaimType = "id",
         };
     });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAuthenticatedUser()
+            .RequireAssertion(context => AuthClaims.IsAdmin(context.User)));
+});
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -45,7 +56,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.SetIsOriginAllowed(_ => true)
             .AllowAnyHeader()
             .AllowAnyMethod());
 });

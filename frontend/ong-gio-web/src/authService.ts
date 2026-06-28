@@ -94,6 +94,29 @@ class AuthService {
   }
 
   /**
+   * Đổi mật khẩu user đang đăng nhập.
+   */
+  async changePassword(
+    matKhauCu: string,
+    matKhauMoi: string,
+    xacNhanMatKhauMoi: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const tenDangNhap = this.getUser()?.tenDangNhap;
+    try {
+      const { data } = await api.post<{ success: boolean; message?: string }>('/api/auth/change-password', {
+        tenDangNhap,
+        matKhauCu,
+        matKhauMoi,
+        xacNhanMatKhauMoi,
+      });
+      return { success: !!data.success, message: data.message };
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Đổi mật khẩu thất bại';
+      return { success: false, message: msg };
+    }
+  }
+
+  /**
    * Đăng xuất và xóa dữ liệu xác thực khỏi localStorage.
    */
   logout(): void {
@@ -124,6 +147,13 @@ class AuthService {
    */
   isAuthenticated(): boolean {
     return !!this.getToken();
+  }
+
+  /**
+   * Kiểm tra user hiện tại có vai trò admin.
+   */
+  isAdmin(): boolean {
+    return this.getUser()?.vaiTro === 'ADMIN';
   }
 }
 
