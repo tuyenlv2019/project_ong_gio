@@ -147,7 +147,7 @@ body {
 
 .order-product-table .order-ton-column,
 .order-product-table .order-area-column {
-  contain: layout style;
+  overflow: hidden;
 }
 
 .order-form-sticky-header {

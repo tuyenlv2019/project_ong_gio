@@ -805,7 +805,7 @@ export default function OrderFormPage() {
                     return (
                       <div className="price-fields-stack ton-fields-stack">
                         <div className="price-field-row">
-                          <FieldLabel>Tôn</FieldLabel>
+                          <FieldLabel>Loại Tôn</FieldLabel>
                           <Form.Item
                             name={[field.name, 'loaiTonId']}
                             noStyle
@@ -820,9 +820,9 @@ export default function OrderFormPage() {
                           </Form.Item>
                         </div>
                         <div className="price-field-row">
-                          <FieldLabel>Kg</FieldLabel>
-                          <span className="display-value ton-display-value" title={preview ? `${preview.trongLuongKg.toFixed(2)} Kg` : undefined}>
-                            {preview ? preview.trongLuongKg.toFixed(2) : '-'}
+                          <FieldLabel>Khối lượng(Kg)</FieldLabel>
+                          <span className="display-value ton-display-value" title={preview ? `${preview.trongLuongKg.toFixed(1)} kg` : undefined}>
+                            {preview ? `${preview.trongLuongKg.toFixed(1)} kg` : '-'}
                           </span>
                         </div>
                       </div>
@@ -860,7 +860,7 @@ export default function OrderFormPage() {
                 {
                   title: 'Chi phí (VNĐ)',
                   dataIndex: 'giaTri',
-                  width: 150,
+                  width: 120,
                   render: (_: any, field: any) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
@@ -895,7 +895,7 @@ export default function OrderFormPage() {
                 {
                   title: 'Thông tin dòng',
                   dataIndex: 'donViSoLuongThue',
-                  width: 114,
+                  width: 125,
                   onHeaderCell: () => ({ className: 'order-line-info-column' }),
                   onCell: () => ({ className: 'order-line-info-column' }),
                   render: (_: any, field: any) => (
@@ -1194,12 +1194,10 @@ export default function OrderFormPage() {
                     .area-fields-stack .display-value {
                       text-align: left;
                     }
-                    .order-area-column {
-                      padding-inline: 4px !important;
-                      overflow: hidden;
-                    }
-                    .order-ton-column {
-                      padding-inline: 4px !important;
+                    .order-area-column,
+                    .order-ton-column,
+                    .order-line-info-column,
+                    .order-value-column {
                       overflow: hidden;
                     }
                     .ton-fields-stack {
@@ -1233,7 +1231,6 @@ export default function OrderFormPage() {
                       white-space: nowrap;
                     }
                     .order-line-info-column {
-                      padding-inline: 4px !important;
                       overflow: hidden;
                     }
                     .line-info-fields-stack {
@@ -1258,7 +1255,6 @@ export default function OrderFormPage() {
                       white-space: nowrap;
                     }
                     .order-value-column {
-                      padding-inline: 4px !important;
                       overflow: hidden;
                     }
                     .value-fields-stack {
