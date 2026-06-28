@@ -1,8 +1,8 @@
 /**
  * Trang danh sách báo giá, hỗ trợ sửa, xóa, đổi trạng thái và export.
  */
-import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Card, Popconfirm, Select, Space, Table, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Card, Popconfirm, Select, Space, Table, Tooltip, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TableSearchBar from '../components/TableSearchBar';
@@ -151,15 +151,26 @@ export default function OrdersPage() {
           }),
           {
             title: 'Thao tác',
-            width: 100,
+            width: 130,
             render: (_, row) => (
               <Space>
-                <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />
-                <Button
-                  size="small"
-                  icon={<DownloadOutlined />}
-                  onClick={() => window.open(getBaoGiaExportUrl(row.id), '_blank')}
-                />
+                <Tooltip title="Sửa">
+                  <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />
+                </Tooltip>
+                <Tooltip title="Sao chép đơn">
+                  <Button
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => navigate(`/don-hang/tao-moi?copyFrom=${row.id}`)}
+                  />
+                </Tooltip>
+                <Tooltip title="Xuất Excel">
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    onClick={() => window.open(getBaoGiaExportUrl(row.id), '_blank')}
+                  />
+                </Tooltip>
                 <Popconfirm title="Xóa đơn hàng?" onConfirm={() => onDelete(row.id)}>
                   <Button size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>

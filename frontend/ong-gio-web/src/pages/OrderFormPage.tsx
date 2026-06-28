@@ -2,10 +2,10 @@
  * Trang tạo/sửa báo giá với preview tính toán theo từng dòng.
  */
 
-import { Button, Card, Col, Collapse, Form, InputNumber, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
-import { ArrowDownOutlined, ArrowUpOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
+import { ArrowDownOutlined, ArrowUpOutlined, CopyOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   createBaoGia,
   formatMoney,
@@ -25,6 +25,7 @@ import HintInputNumber from '../components/HintInputNumber';
 import HintSelect from '../components/HintSelect';
 import LineHistoryPickerModal from '../components/LineHistoryPickerModal';
 import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
+import { mapBaoGiaToLineInputs } from '../utils/baoGiaFormMapper';
 import { resolveMasterImageUrl } from '../utils/imageUrl';
 
 const { Title, Text } = Typography;
@@ -209,7 +210,14 @@ function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
  */
 export default function OrderFormPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const copyFromId = useMemo(() => {
+    if (isEdit) return null;
+    const raw = searchParams.get('copyFrom');
+    if (!raw || !/^\d+$/.test(raw)) return null;
+    return Number(raw);
+  }, [isEdit, searchParams]);
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const lineInputs = Form.useWatch('lineInputs', form);
@@ -224,6 +232,28 @@ export default function OrderFormPage() {
   const [historyLineIndex, setHistoryLineIndex] = useState<number | null>(null);
   const [movePopoverIndex, setMovePopoverIndex] = useState<number | null>(null);
   const [moveTargetStt, setMoveTargetStt] = useState<number>(1);
+  const [copySourceMa, setCopySourceMa] = useState<string | null>(null);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
+  const [productTableStickyOffset, setProductTableStickyOffset] = useState(180);
+
+  useEffect(() => {
+    const stickyHeader = stickyHeaderRef.current;
+    if (!stickyHeader) return;
+
+    const updateStickyOffset = () => {
+      setProductTableStickyOffset(stickyHeader.offsetHeight);
+    };
+
+    updateStickyOffset();
+    const observer = new ResizeObserver(updateStickyOffset);
+    observer.observe(stickyHeader);
+    window.addEventListener('resize', updateStickyOffset);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateStickyOffset);
+    };
+  }, [copySourceMa]);
 
   useEffect(() => {
     (async () => {
@@ -233,21 +263,7 @@ export default function OrderFormPage() {
 
       if (isEdit && id) {
         const bg = await getBaoGia(Number(id));
-        const initialLines = (bg.chiTietBaoGias ?? []).map((c) => ({
-          tenSanPham: c.tenSanPham,
-          donViTinh: c.donViTinh ?? 'cái',
-          thueSuat: (c.thueSuat ?? bg.thueSuat ?? 0.08) * 100,
-          nhomSanPhamId: c.nhomSanPham?.id ?? 0,
-          loaiTonId: c.loaiTon?.id ?? 0,
-          w: c.wInput,
-          h: c.hInput,
-          thanhTienTon: c.thanhTienTon,
-          thamSoNhap: c.thamSoNhapJson ? JSON.parse(c.thamSoNhapJson) : {},
-          soLuong: c.soLuong,
-          giaNhanCong: c.giaNhanCong ?? 0,
-          phuKien: c.phuKien ?? 0,
-          ghiChu: c.ghiChu,
-        }));
+        const initialLines = mapBaoGiaToLineInputs(bg);
         const lineInputs = initialLines.length > 0
           ? [...initialLines, createEmptyLine(nhoms, tons)]
           : [createEmptyLine(nhoms, tons)];
@@ -259,6 +275,26 @@ export default function OrderFormPage() {
         if (initialLines.length > 0) {
           await refreshPreviews({ lineInputs }, nhoms);
         }
+      } else if (copyFromId) {
+        try {
+          const bg = await getBaoGia(copyFromId);
+          setCopySourceMa(bg.maBaoGia);
+          const initialLines = mapBaoGiaToLineInputs(bg);
+          const lineInputs = initialLines.length > 0
+            ? [...initialLines, createEmptyLine(nhoms, tons)]
+            : [createEmptyLine(nhoms, tons)];
+          form.setFieldsValue({
+            tenKhachHang: '',
+            trangThai: 'CHUA_XU_LY',
+            lineInputs,
+          });
+          if (initialLines.length > 0) {
+            await refreshPreviews({ lineInputs }, nhoms);
+          }
+        } catch {
+          message.error('Không tải được đơn hàng để sao chép');
+          navigate('/don-hang/tao-moi', { replace: true });
+        }
       } else if (nhoms[0] && tons[0]) {
         form.setFieldsValue({
           trangThai: 'CHUA_XU_LY',
@@ -266,7 +302,7 @@ export default function OrderFormPage() {
         });
       }
     })();
-  }, [form, id, isEdit]);
+  }, [form, id, isEdit, copyFromId, navigate]);
 
   /**
    * Nếu dòng cuối đã được điền, tự động thêm một dòng rỗng mới.
@@ -601,7 +637,27 @@ export default function OrderFormPage() {
 
   return (
     <div>
-      <Title level={3}>{isEdit ? 'Sửa đơn hàng' : 'Tạo đơn hàng mới'}</Title>
+      <Space align="center" style={{ marginBottom: copySourceMa ? 0 : 16 }}>
+        <Title level={3} style={{ margin: 0 }}>
+          {isEdit ? 'Sửa đơn hàng' : copySourceMa ? 'Tạo đơn hàng mới (sao chép)' : 'Tạo đơn hàng mới'}
+        </Title>
+        {isEdit && id && (
+          <Button
+            icon={<CopyOutlined />}
+            onClick={() => navigate(`/don-hang/tao-moi?copyFrom=${id}`)}
+          >
+            Sao chép đơn
+          </Button>
+        )}
+      </Space>
+      {copySourceMa && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ margin: '16px 0' }}
+          message={`Đang tạo đơn mới từ ${copySourceMa}. Vui lòng nhập lại tên khách hàng. Trạng thái đặt lại "Chưa xử lý"; mã báo giá mới sẽ được tạo khi lưu.`}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
@@ -610,44 +666,51 @@ export default function OrderFormPage() {
           required: 'Vui lòng nhập ${label}',
         }}
       >
-        <Card title="Thông tin đơn hàng" style={{ marginBottom: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="tenKhachHang"
-                label="Tên khách hàng"
-                rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
-              >
-                <HintInput placeholder="Nhập tên khách hàng" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="trangThai"
-                label="Trạng thái đơn hàng"
-                rules={[{ required: true, message: 'Vui lòng chọn trạng thái đơn hàng' }]}
-              >
-                <HintSelect
-                  placeholder="Chọn trạng thái đơn hàng"
-                  options={Object.entries(TRANG_THAI_DON).map(([value, opt]) => ({
-                    value,
-                    label: opt.label,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+        <div ref={stickyHeaderRef} className="order-form-sticky-header">
+          <Card title="Thông tin đơn hàng" className="order-order-info-card">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="tenKhachHang"
+                  label="Tên khách hàng"
+                  rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
+                >
+                  <HintInput placeholder="Nhập tên khách hàng" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="trangThai"
+                  label="Trạng thái đơn hàng"
+                  rules={[{ required: true, message: 'Vui lòng chọn trạng thái đơn hàng' }]}
+                >
+                  <HintSelect
+                    placeholder="Chọn trạng thái đơn hàng"
+                    options={Object.entries(TRANG_THAI_DON).map(([value, opt]) => ({
+                      value,
+                      label: opt.label,
+                    }))}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+          <div className="order-product-cluster-bar">
+            <span className="order-product-cluster-bar-title">Cụm sản phẩm</span>
+          </div>
+        </div>
 
-        <Card title="Cụm sản phẩm">
+        <Card className="order-product-cluster-card">
           <Form.List name="lineInputs">
             {(fields, { add, remove, move }) => {
               const columns: any[] = [
                 {
                   title: 'STT',
                   dataIndex: 'stt',
-                  width: 40,
+                  width: 44,
                   align: 'center' as const,
+                  onHeaderCell: () => ({ className: 'order-stt-column' }),
+                  onCell: () => ({ className: 'order-stt-column' }),
                   render: (_: any, __: any, idx: number) => idx + 1,
                 },
                 {
@@ -692,6 +755,7 @@ export default function OrderFormPage() {
                   title: 'Kích thước (mm)',
                   dataIndex: 'kichThuoc',
                   width: 293,
+                  align: 'center' as const,
                   onCell: () => ({ className: 'dimension-column-cell' }),
                   onHeaderCell: () => ({ className: 'dimension-column-cell' }),
                   render: (_: any, field: any) => {
@@ -734,23 +798,32 @@ export default function OrderFormPage() {
                   title: 'Thông tin tôn',
                   dataIndex: 'loaiTonTrongLuong',
                   width: 150,
+                  onHeaderCell: () => ({ className: 'order-ton-column' }),
+                  onCell: () => ({ className: 'order-ton-column' }),
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
                     return (
-                      <div className="price-fields-stack">
+                      <div className="price-fields-stack ton-fields-stack">
                         <div className="price-field-row">
-                          <FieldLabel>Loại tôn</FieldLabel>
+                          <FieldLabel>Tôn</FieldLabel>
                           <Form.Item
                             name={[field.name, 'loaiTonId']}
                             noStyle
                             rules={requiredRulesFor('Loại tôn') ?? requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }]}
                           >
-                            <HintSelect placeholder="Chọn tôn" options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))} />
+                            <HintSelect
+                              className="ton-field-select"
+                              placeholder="Chọn tôn"
+                              tooltip="Loại tôn"
+                              options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))}
+                            />
                           </Form.Item>
                         </div>
                         <div className="price-field-row">
-                          <FieldLabel>Trọng lượng (Kg)</FieldLabel>
-                          <span className="display-value">{preview ? preview.trongLuongKg.toFixed(2) : '-'}</span>
+                          <FieldLabel>Kg</FieldLabel>
+                          <span className="display-value ton-display-value" title={preview ? `${preview.trongLuongKg.toFixed(2)} Kg` : undefined}>
+                            {preview ? preview.trongLuongKg.toFixed(2) : '-'}
+                          </span>
                         </div>
                       </div>
                     );
@@ -759,20 +832,26 @@ export default function OrderFormPage() {
                 {
                   title: 'Diện tích Sx',
                   dataIndex: 'dienTichSx',
-                  width: 150,
+                  width: 100,
                   align: 'left' as const,
+                  onHeaderCell: () => ({ className: 'order-area-column' }),
+                  onCell: () => ({ className: 'order-area-column' }),
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
                     if (!preview) return '-';
                     return (
                       <div className="price-fields-stack area-fields-stack">
                         <div className="price-field-row">
-                          <FieldLabel>∑Ssx (m²)</FieldLabel>
-                          <span className="display-value">{formatArea(preview.dienTichSx1Cai)}</span>
+                          <FieldLabel>Ssx (m²)</FieldLabel>
+                          <span className="display-value area-display-value" title={`∑Ssx 1 cái: ${formatArea(preview.dienTichSx1Cai)} m²`}>
+                            {formatArea(preview.dienTichSx1Cai)}
+                          </span>
                         </div>
                         <div className="price-field-row">
-                          <FieldLabel>∑Ssx (mét tới)</FieldLabel>
-                          <span className="display-value">{formatArea(preview.dienTichSanXuatMetToi)}</span>
+                          <FieldLabel>Ssx (m)</FieldLabel>
+                          <span className="display-value area-display-value" title={`∑Ssx mét tới: ${formatArea(preview.dienTichSanXuatMetToi)} m`}>
+                            {formatArea(preview.dienTichSanXuatMetToi)}
+                          </span>
                         </div>
                       </div>
                     );
@@ -816,9 +895,11 @@ export default function OrderFormPage() {
                 {
                   title: 'Thông tin dòng',
                   dataIndex: 'donViSoLuongThue',
-                  width: 150,
+                  width: 114,
+                  onHeaderCell: () => ({ className: 'order-line-info-column' }),
+                  onCell: () => ({ className: 'order-line-info-column' }),
                   render: (_: any, field: any) => (
-                    <div className="price-fields-stack">
+                    <div className="price-fields-stack line-info-fields-stack">
                       <div className="price-field-row">
                         <FieldLabel>Đơn vị tính</FieldLabel>
                         <Form.Item name={[field.name, 'donViTinh']} noStyle rules={requiredRulesFor('Đơn vị tính') ?? [{ required: true, message: 'Nhập đơn vị tính' }]}>
@@ -828,13 +909,13 @@ export default function OrderFormPage() {
                       <div className="price-field-row">
                         <FieldLabel>Số lượng</FieldLabel>
                         <Form.Item name={[field.name, 'soLuong']} noStyle rules={requiredRulesFor('Số lượng') ?? [{ required: true, message: 'Nhập SL' }]}>
-                          <HintInputNumber min={1} controls={false} style={{ width: '100%' }} placeholder="Số lượng" />
+                          <HintInputNumber min={1} controls={false} style={{ width: '100%' }} placeholder="SL" tooltip="Số lượng" />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <FieldLabel>Thuế suất</FieldLabel>
+                        <FieldLabel>Thuế</FieldLabel>
                         <Form.Item name={[field.name, 'thueSuat']} noStyle rules={requiredRulesFor('Thuế suất') ?? [{ required: true, message: 'Nhập thuế suất' }]}>
-                          <HintInputNumber min={0} max={100} step={1} controls={false} addonAfter="%" style={{ width: '100%' }} placeholder="Thuế suất (%)" />
+                          <HintInputNumber min={0} max={100} step={1} controls={false} addonAfter="%" style={{ width: '100%' }} placeholder="%" tooltip="Thuế suất (%)" />
                         </Form.Item>
                       </div>
                     </div>
@@ -843,8 +924,10 @@ export default function OrderFormPage() {
                 {
                   title: 'Giá trị (VNĐ)',
                   dataIndex: 'donGiaThanhTien',
-                  width: 130,
+                  width: 112,
                   align: 'left' as const,
+                  onHeaderCell: () => ({ className: 'order-value-column' }),
+                  onCell: () => ({ className: 'order-value-column' }),
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
                     if (!preview) return '-';
@@ -854,15 +937,21 @@ export default function OrderFormPage() {
                     const soLuong = item?.soLuong || 1;
                     const unitPrice = soLuong > 0 ? Math.round(adjustedTotal / soLuong) : 0;
                     const lineTotal = unitPrice * soLuong;
+                    const unitPriceText = formatMoney(unitPrice);
+                    const lineTotalText = formatMoney(lineTotal);
                     return (
-                      <div className="price-fields-stack area-fields-stack">
+                      <div className="price-fields-stack area-fields-stack value-fields-stack">
                         <div className="price-field-row">
-                          <FieldLabel>Đơn giá (VND)</FieldLabel>
-                          <span className="display-value">{formatMoney(unitPrice)}</span>
+                          <FieldLabel>Đơn giá(VND)</FieldLabel>
+                          <span className="display-value value-display-value" title={`Đơn giá: ${unitPriceText} đ`}>
+                            {unitPriceText}
+                          </span>
                         </div>
                         <div className="price-field-row">
-                          <FieldLabel>Thành tiền (VND)</FieldLabel>
-                          <span className="display-value">{formatMoney(lineTotal)}</span>
+                          <FieldLabel>Thành tiền(VND)</FieldLabel>
+                          <span className="display-value value-display-value" title={`Thành tiền: ${lineTotalText} đ`}>
+                            {lineTotalText}
+                          </span>
                         </div>
                       </div>
                     );
@@ -912,8 +1001,10 @@ export default function OrderFormPage() {
                 {
                   title: 'Thao tác',
                   dataIndex: 'action',
-                  width: 48,
+                  width: 76,
                   align: 'center' as const,
+                  onHeaderCell: () => ({ className: 'order-action-column' }),
+                  onCell: () => ({ className: 'order-action-column' }),
                   render: (_: any, field: any, index: number) => {
                     const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];
                     const isBuffer = isSkippedTrailingLine(index, items[index], items.length);
@@ -985,15 +1076,28 @@ export default function OrderFormPage() {
                             disabled={isBuffer || movableCount <= 1}
                           />
                         </Popover>
-                        <Button
-                          type="text"
-                          size="small"
-                          danger
-                          icon={<MinusCircleOutlined />}
-                          title="Xóa dòng"
-                          onClick={() => remove(field.name)}
+                        <Popconfirm
+                          title="Xóa dòng sản phẩm?"
+                          description={
+                            items[index]?.tenSanPham?.trim()
+                              ? `Dòng ${index + 1}: ${items[index].tenSanPham}`
+                              : `Dòng ${index + 1}`
+                          }
+                          okText="Xóa"
+                          cancelText="Hủy"
+                          okButtonProps={{ danger: true }}
                           disabled={fields.length === 1}
-                        />
+                          onConfirm={() => remove(field.name)}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<MinusCircleOutlined />}
+                            title="Xóa dòng"
+                            disabled={fields.length === 1}
+                          />
+                        </Popconfirm>
                       </Space>
                     );
                   },
@@ -1006,11 +1110,14 @@ export default function OrderFormPage() {
               return (
                 <>
                   <Table
+                    className="order-product-table"
                     rowKey="key"
                     dataSource={fields}
                     columns={columns}
                     pagination={false}
-                    scroll={{ x: 873 }}
+                    tableLayout="fixed"
+                    sticky={{ offsetHeader: productTableStickyOffset }}
+                    scroll={{ x: 1379 }}
                     locale={{ emptyText: 'Chưa có dòng sản phẩm' }}
                     rowClassName={(_, __, index) => {
                       const item = items[index];
@@ -1048,14 +1155,16 @@ export default function OrderFormPage() {
                     Thêm dòng mới
                   </Button>
                   <style>{`
-                    .price-fields-stack {
+                    .order-product-table .price-fields-stack {
                       display: grid;
                       gap: 10px;
-                      min-width: 140px;
+                      min-width: 0;
+                      max-width: 100%;
                     }
                     .price-field-row {
                       display: grid;
                       gap: 4px;
+                      min-width: 0;
                     }
                     .price-field-label {
                       font-size: 12px;
@@ -1078,8 +1187,95 @@ export default function OrderFormPage() {
                     .display-value-stack {
                       text-align: center;
                     }
+                    .area-fields-stack {
+                      min-width: 0;
+                      gap: 6px;
+                    }
                     .area-fields-stack .display-value {
                       text-align: left;
+                    }
+                    .order-area-column {
+                      padding-inline: 4px !important;
+                      overflow: hidden;
+                    }
+                    .order-ton-column {
+                      padding-inline: 4px !important;
+                      overflow: hidden;
+                    }
+                    .ton-fields-stack {
+                      min-width: 0;
+                      max-width: 100%;
+                      gap: 6px;
+                    }
+                    .order-ton-column .price-field-label {
+                      font-size: 11px;
+                    }
+                    .order-ton-column .ton-display-value {
+                      display: block;
+                      font-size: 12px;
+                      font-variant-numeric: tabular-nums;
+                      text-align: left;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
+                    }
+                    .order-ton-column .hint-control-wrap,
+                    .order-ton-column .ton-field-select {
+                      max-width: 100%;
+                      min-width: 0;
+                    }
+                    .order-ton-column .ton-field-select .ant-select-selector {
+                      overflow: hidden;
+                    }
+                    .order-ton-column .ton-field-select .ant-select-selection-item {
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
+                    }
+                    .order-line-info-column {
+                      padding-inline: 4px !important;
+                      overflow: hidden;
+                    }
+                    .line-info-fields-stack {
+                      gap: 6px;
+                    }
+                    .order-line-info-column .price-field-label {
+                      font-size: 11px;
+                    }
+                    .order-line-info-column .ant-input-number-group-addon {
+                      padding-inline: 4px;
+                    }
+                    .order-area-column .price-field-label {
+                      font-size: 11px;
+                    }
+                    .order-area-column .area-display-value {
+                      display: block;
+                      font-size: 12px;
+                      font-variant-numeric: tabular-nums;
+                      line-height: 1.25;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
+                    }
+                    .order-value-column {
+                      padding-inline: 4px !important;
+                      overflow: hidden;
+                    }
+                    .value-fields-stack {
+                      gap: 6px;
+                    }
+                    .order-value-column .price-field-label {
+                      font-size: 11px;
+                    }
+                    .order-value-column .value-display-value {
+                      display: block;
+                      font-size: 12px;
+                      font-variant-numeric: tabular-nums;
+                      line-height: 1.25;
+                      text-align: left;
+                      overflow: hidden;
+                      text-overflow: ellipsis;
+                      white-space: nowrap;
                     }
                     .display-value {
                       display: block;
@@ -1092,11 +1288,15 @@ export default function OrderFormPage() {
                     }
                     .dimension-column-cell {
                       padding: 0 !important;
+                      text-align: center;
                     }
                     .dimension-fields-grid {
-                      display: grid;
+                      display: inline-grid;
                       grid-template-columns: repeat(2, minmax(103px, 1fr));
                       gap: 8px;
+                      margin-inline: auto;
+                      max-width: 100%;
+                      text-align: left;
                     }
                     .dimension-field-input.ant-input-number-group,
                     .dimension-field-input.ant-input-number-group-wrapper {
@@ -1123,8 +1323,22 @@ export default function OrderFormPage() {
                     .error-row td {
                       padding-inline: 1px !important;
                     }
-                    td {
+                    .order-product-table td:not(.order-stt-column):not(.order-action-column) {
                       padding-inline: 1px !important;
+                    }
+                    .order-product-table .order-stt-column,
+                    .order-product-table .order-action-column {
+                      white-space: nowrap;
+                    }
+                    .order-product-table .order-stt-column {
+                      padding-inline: 4px !important;
+                    }
+                    .order-product-table .order-action-column {
+                      padding-inline: 8px !important;
+                    }
+                    .order-product-table .order-action-column .ant-space {
+                      width: 100%;
+                      justify-content: center;
                     }
                   `}</style>
                 </>
