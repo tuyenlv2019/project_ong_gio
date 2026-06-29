@@ -27,7 +27,7 @@ export interface LoaiTon {
   id: number;
   thuongHieu: string;
   doDay: number;
-  donGiaM2: number;
+  donGiaMetToi: number;
   kgMoiMetToi: number;
   createdAt?: string;
   createdBy?: string;
@@ -161,4 +161,6 @@ export interface LineFormValues {
   thamSoNhap?: Record<string, number>;
   ghiChu?: string;
   thanhTienTon?: number;
+  /** Tiền tôn cho 1 cái (VNĐ); không phụ thuộc số lượng. */
+  thanhTienTonManual?: boolean;
 }

@@ -21,8 +21,8 @@ function getMaterialSearchText(row: LoaiTon) {
   return joinSearchParts(
     row.thuongHieu,
     row.doDay,
-    formatMoney(row.donGiaM2),
-    row.donGiaM2,
+    formatMoney(row.donGiaMetToi),
+    row.donGiaMetToi,
     formatKgMetToi(row.kgMoiMetToi),
     row.kgMoiMetToi,
     ...getAuditSearchText(row),
@@ -48,7 +48,7 @@ export default function MaterialsPage() {
 
   const openModal = (item?: LoaiTon) => {
     setEditing(item ?? null);
-    form.setFieldsValue(item ?? { thuongHieu: '', doDay: 0.58, donGiaM2: 185000, kgMoiMetToi: 4.5 });
+    form.setFieldsValue(item ?? { thuongHieu: '', doDay: 0.58, donGiaMetToi: 222000, kgMoiMetToi: 4.5 });
     setOpen(true);
   };
 
@@ -86,7 +86,13 @@ export default function MaterialsPage() {
           createSttColumn<LoaiTon>(),
           { title: 'Thương hiệu', dataIndex: 'thuongHieu', width: 140, ellipsis: true, render: renderEllipsisCell },
           { title: 'Độ dày (mm)', dataIndex: 'doDay', width: 110, ellipsis: true, render: renderEllipsisCell },
-          { title: 'Đơn giá/m² (VND)', dataIndex: 'donGiaM2', width: 150, ellipsis: true, render: (v) => renderEllipsisCell(`${formatMoney(v)} VND`) },
+          {
+            title: 'Đơn giá/mét tới (VND)',
+            dataIndex: 'donGiaMetToi',
+            width: 170,
+            ellipsis: true,
+            render: (v) => renderEllipsisCell(`${formatMoney(v)} VND`),
+          },
           {
             title: 'Khối lượng (kg/1mét tới)',
             dataIndex: 'kgMoiMetToi',
@@ -131,7 +137,7 @@ export default function MaterialsPage() {
           <Form.Item name="doDay" label="Độ dày (mm)" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} step={0.01} />
           </Form.Item>
-          <Form.Item name="donGiaM2" label="Đơn giá/m² (VND)" rules={[{ required: true }]}>
+          <Form.Item name="donGiaMetToi" label="Đơn giá/mét tới (VND)" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} min={0} precision={0} addonAfter="VND" {...moneyInputNumberProps} />
           </Form.Item>
           <Form.Item

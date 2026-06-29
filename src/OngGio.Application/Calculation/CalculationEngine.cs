@@ -174,18 +174,20 @@ public class CalculationEngine : ICalculationEngine
 
         var tongDienTichLo = ssx1Cai * request.SoLuong;
 
-        var thanhTienTon = Math.Round(tongDienTichLo * loaiTon.DonGiaM2, 0, MidpointRounding.AwayFromZero);
+        var giaTonMetToi = loaiTon.DonGiaMetToi;
+
+        var thanhTienTon = Math.Round(
+            giaTonMetToi * dienTichSanXuatMetToi * request.SoLuong,
+            0,
+            MidpointRounding.AwayFromZero);
 
         var trongLuongKg = dienTichSanXuatMetToi * loaiTon.KgMoiMetToi;
 
-        var thanhTienNhanCongPhuKien = (request.GiaNhanCong + request.PhuKien) * request.SoLuong;
-
-        var donGiaCuoi = request.SoLuong > 0
-            ? Math.Round(
-                (thanhTienTon + thanhTienNhanCongPhuKien) / request.SoLuong,
-                0,
-                MidpointRounding.AwayFromZero)
-            : 0m;
+        // Đơn giá/cái = giá tôn (đ/mét tới) × diện tích sản xuất mét tới + nhân công + phụ kiện
+        var donGiaCuoi = Math.Round(
+            giaTonMetToi * dienTichSanXuatMetToi + request.GiaNhanCong + request.PhuKien,
+            0,
+            MidpointRounding.AwayFromZero);
 
         var thanhTien = donGiaCuoi * request.SoLuong;
 

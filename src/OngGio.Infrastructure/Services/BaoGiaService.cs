@@ -214,14 +214,21 @@ public class BaoGiaService : IBaoGiaService
             EnsureDimensionsAreComplete(nhom, thamSo, calcRequest);
             var result = await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, calcRequest, ct);
 
-            // Ưu tiên sử dụng Giá tôn do người dùng nhập, nếu không có mới dùng kết quả tính toán tự động
-            var finalThanhTienTon = line.ThanhTienTon > 0
+            // Form gửi tiền tôn/1 cái; DB lưu tổng = giá tôn × số lượng
+            var giaTonPerPiece = line.ThanhTienTon > 0
                 ? Math.Round(line.ThanhTienTon, 0, MidpointRounding.AwayFromZero)
-                : result.ThanhTienTon;
-            var adjustedThanhTien = result.ThanhTien + (finalThanhTienTon - result.ThanhTienTon);
-            var donGiaCuoi = line.SoLuong > 0
-                ? Math.Round(adjustedThanhTien / line.SoLuong, 0, MidpointRounding.AwayFromZero)
-                : 0m;
+                : Math.Round(
+                    loaiTon.DonGiaMetToi * result.DienTichSanXuatMetToi,
+                    0,
+                    MidpointRounding.AwayFromZero);
+            var finalThanhTienTon = Math.Round(giaTonPerPiece * line.SoLuong, 0, MidpointRounding.AwayFromZero);
+            var giaTonMetToi = result.DienTichSanXuatMetToi > 0
+                ? giaTonPerPiece / result.DienTichSanXuatMetToi
+                : loaiTon.DonGiaMetToi;
+            var donGiaCuoi = Math.Round(
+                giaTonMetToi * result.DienTichSanXuatMetToi + line.GiaNhanCong + line.PhuKien,
+                0,
+                MidpointRounding.AwayFromZero);
             var finalThanhTien = donGiaCuoi * line.SoLuong;
 
             baoGia.ChiTietBaoGias.Add(new ChiTietBaoGia

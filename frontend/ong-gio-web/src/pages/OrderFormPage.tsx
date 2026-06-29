@@ -35,7 +35,12 @@ import HintInputNumber from '../components/HintInputNumber';
 import HintSelect from '../components/HintSelect';
 import LineHistoryPickerModal from '../components/LineHistoryPickerModal';
 import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
-import { mapBaoGiaToLineInputs } from '../utils/baoGiaFormMapper';
+import {
+  mapBaoGiaToLineInputs,
+  suggestThanhTienTon,
+  thanhTienTonPerPieceToGiaTonMetToi,
+  thanhTienTonTotalToPerPiece,
+} from '../utils/baoGiaFormMapper';
 import { resolveMasterImageUrl } from '../utils/imageUrl';
 
 const { Title, Text } = Typography;
@@ -104,6 +109,15 @@ function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
   }
 
   return fields;
+}
+
+/** Loại sản phẩm đủ điều kiện nhập đơn: đã có công thức diện tích trong master. */
+function hasCongThucDienTich(nhom?: Pick<NhomSanPham, 'congThucDienTich'> | null) {
+  return Boolean(nhom?.congThucDienTich?.trim());
+}
+
+function filterOrderableNhoms(nhoms: NhomSanPham[]) {
+  return nhoms.filter(hasCongThucDienTich);
 }
 
 /** Lấy giá trị kích thước từ dòng form theo cấu hình DimensionField. */
@@ -221,6 +235,55 @@ function getMovableRowCount(items: Partial<LineFormValues>[]) {
   return lastIsBuffer ? items.length - 1 : items.length;
 }
 
+/**
+ * Tính đơn giá / thành tiền dòng.
+ * Đơn giá = giá tôn (đ/mét tới) × ∑Ssx mét tới + nhân công + phụ kiện.
+ * Ô Giá tôn = tiền tôn/1 cái (không đổi khi đổi số lượng).
+ */
+function calcLinePricing(
+  preview: CalculationResult,
+  item: Partial<LineFormValues>,
+  donGiaMetToiFallback?: number,
+): { unitPrice: number; lineTotal: number; giaTonMetToi: number } {
+  const soLuong = Number(item.soLuong) || 1;
+  const metToi = preview.dienTichSanXuatMetToi;
+  const giaNhanCong = Number(item.giaNhanCong) || 0;
+  const phuKien = Number(item.phuKien) || 0;
+
+  const defaultGiaTonMetToi = donGiaMetToiFallback ?? 0;
+  const isManualTon = Boolean(item.thanhTienTonManual);
+  const giaTonMetToi =
+    isManualTon && item.thanhTienTon != null
+      ? thanhTienTonPerPieceToGiaTonMetToi(item.thanhTienTon, metToi)
+      : item.thanhTienTon != null && item.thanhTienTon > 0
+        ? thanhTienTonPerPieceToGiaTonMetToi(item.thanhTienTon, metToi)
+        : defaultGiaTonMetToi;
+
+  const unitPrice = Math.round(giaTonMetToi * metToi + giaNhanCong + phuKien);
+  return { unitPrice, lineTotal: unitPrice * soLuong, giaTonMetToi };
+}
+
+/** Cập nhật index trong Set sau khi Form.List move dòng. */
+function remapIndexSetAfterMove(indices: Set<number>, fromIndex: number, toIndex: number) {
+  const next = new Set<number>();
+  indices.forEach((index) => {
+    if (index === fromIndex) {
+      next.add(toIndex);
+      return;
+    }
+    if (fromIndex < toIndex && index > fromIndex && index <= toIndex) {
+      next.add(index - 1);
+      return;
+    }
+    if (fromIndex > toIndex && index >= toIndex && index < fromIndex) {
+      next.add(index + 1);
+      return;
+    }
+    next.add(index);
+  });
+  return next;
+}
+
 /** Giá trị mặc định khi thêm dòng sản phẩm mới. */
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
 
@@ -266,6 +329,7 @@ export default function OrderFormPage() {
 
   // --- Master data & kết quả tính toán ---
   const [nhomList, setNhomList] = useState<NhomSanPham[]>([]);
+  const orderableNhomList = useMemo(() => filterOrderableNhoms(nhomList), [nhomList]);
   const [loaiTonList, setLoaiTonList] = useState<LoaiTon[]>([]);
   const [preview, setPreview] = useState<CalculationResult | null>(null);
   const [linePreviews, setLinePreviews] = useState<Record<number, CalculationResult>>({});
@@ -283,6 +347,48 @@ export default function OrderFormPage() {
   // --- Sticky header: đo chiều cao khối Thông tin đơn + Cụm SP cho offset bảng ---
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [productTableStickyOffset, setProductTableStickyOffset] = useState(180);
+  /** Tránh đánh dấu Giá tôn là nhập thủ công khi form tự cập nhật từ preview. */
+  const isAutoUpdatingThanhTienTonRef = useRef(false);
+  /** Dòng user đã sửa Giá tôn — cập nhật đồng bộ, tránh bị preview ghi đè. */
+  const thanhTienTonManualLinesRef = useRef<Set<number>>(new Set());
+
+  const isThanhTienTonManual = (line: Partial<LineFormValues> | undefined, index: number) =>
+    Boolean(line?.thanhTienTonManual) || thanhTienTonManualLinesRef.current.has(index);
+
+  const markManualTonFromChange = (changedValues: { lineInputs?: Array<Partial<LineFormValues> | null> }) => {
+    const changedLines = changedValues?.lineInputs;
+    if (!Array.isArray(changedLines)) return;
+    changedLines.forEach((patch, index) => {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'thanhTienTon')) {
+        thanhTienTonManualLinesRef.current.add(index);
+        form.setFieldValue(['lineInputs', index, 'thanhTienTonManual'], true);
+      }
+    });
+  };
+
+  const markManualTonLine = (lineIndex: number) => {
+    thanhTienTonManualLinesRef.current.add(lineIndex);
+    form.setFieldValue(['lineInputs', lineIndex, 'thanhTienTonManual'], true);
+  };
+
+  const withManualTonFlags = (items: LineFormValues[]) =>
+    items.map((line, index) => ({
+      ...line,
+      thanhTienTonManual: isThanhTienTonManual(line, index),
+    }));
+
+  /** Options loại SP cho dropdown: chỉ SP có công thức; giữ lựa chọn cũ khi sửa đơn. */
+  const getNhomSelectOptions = (lineIndex: number) => {
+    const options = orderableNhomList.map((n) => ({ value: n.id, label: n.tenNhom }));
+    const currentId = Number(lineInputs?.[lineIndex]?.nhomSanPhamId);
+    if (currentId && !orderableNhomList.some((n) => n.id === currentId)) {
+      const legacy = nhomList.find((n) => n.id === currentId);
+      if (legacy) {
+        options.push({ value: legacy.id, label: `${legacy.tenNhom} (chưa có công thức)` });
+      }
+    }
+    return options;
+  };
 
   /** Cập nhật offset header bảng khi khối sticky đổi kích thước (resize / copy banner). */
   useEffect(() => {
@@ -313,6 +419,7 @@ export default function OrderFormPage() {
   useEffect(() => {
     (async () => {
       const [nhoms, tons] = await Promise.all([getNhomSanPhams(), getLoaiTons()]);
+      const orderableNhoms = filterOrderableNhoms(nhoms);
       setNhomList(nhoms);
       setLoaiTonList(tons);
 
@@ -320,8 +427,8 @@ export default function OrderFormPage() {
         const bg = await getBaoGia(Number(id));
         const initialLines = mapBaoGiaToLineInputs(bg);
         const lineInputs = initialLines.length > 0
-          ? [...initialLines, createEmptyLine(nhoms, tons)]
-          : [createEmptyLine(nhoms, tons)];
+          ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
+          : [createEmptyLine(orderableNhoms, tons)];
         form.setFieldsValue({
           tenKhachHang: bg.tenKhachHang,
           trangThai: bg.trangThai || 'CHUA_XU_LY',
@@ -336,8 +443,8 @@ export default function OrderFormPage() {
           setCopySourceMa(bg.maBaoGia);
           const initialLines = mapBaoGiaToLineInputs(bg);
           const lineInputs = initialLines.length > 0
-            ? [...initialLines, createEmptyLine(nhoms, tons)]
-            : [createEmptyLine(nhoms, tons)];
+            ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
+            : [createEmptyLine(orderableNhoms, tons)];
           form.setFieldsValue({
             tenKhachHang: '',
             trangThai: 'CHUA_XU_LY',
@@ -350,10 +457,10 @@ export default function OrderFormPage() {
           message.error('Không tải được đơn hàng để sao chép');
           navigate('/don-hang/tao-moi', { replace: true });
         }
-      } else if (nhoms[0] && tons[0]) {
+      } else if (orderableNhoms[0] && tons[0]) {
         form.setFieldsValue({
           trangThai: 'CHUA_XU_LY',
-          lineInputs: [createEmptyLine(nhoms, tons)],
+          lineInputs: [createEmptyLine(orderableNhoms, tons)],
         });
       }
     })();
@@ -366,7 +473,7 @@ export default function OrderFormPage() {
   const ensureNewRowIfNeeded = (allValues: any) => {
     const items = allValues.lineInputs || [];
     if (items.length === 0) {
-      form.setFieldsValue({ lineInputs: [createEmptyLine(nhomList, loaiTonList)] });
+      form.setFieldsValue({ lineInputs: [createEmptyLine(orderableNhomList, loaiTonList)] });
       return;
     }
     const last = items[items.length - 1];
@@ -379,7 +486,7 @@ export default function OrderFormPage() {
       last.soLuong > 0 &&
       hasAllDimensions(last, lastNhom);
     if (filled) {
-      form.setFieldsValue({ lineInputs: [...items, createEmptyLine(nhomList, loaiTonList)] });
+      form.setFieldsValue({ lineInputs: [...items, createEmptyLine(orderableNhomList, loaiTonList)] });
     }
   };
 
@@ -389,32 +496,41 @@ export default function OrderFormPage() {
    * @param customNhomList Danh sách nhóm sản phẩm (dùng khi state chưa cập nhật kịp).
    */
   const refreshPreviews = async (allValues: any, customNhomList?: NhomSanPham[]) => {
-    const items: LineFormValues[] = allValues.lineInputs || [];
+    const items: LineFormValues[] = withManualTonFlags(allValues.lineInputs || []);
     const previews: Record<number, CalculationResult> = {};
     const currentNhomList = customNhomList || nhomList;
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      const nhom = currentNhomList.find((n) => n.id === Number(item?.nhomSanPhamId));
-      const canPreview = item && item.nhomSanPhamId && item.loaiTonId && Number(item.soLuong) > 0 && hasAllDimensions(item, nhom);
-      if (canPreview) {
-        try {
-          // Chuẩn hóa payload tương đương logic khi lưu
-          const res = await previewCalculation({
-            ...item,
-            thueSuat: (item.thueSuat ?? 0) / 100,
-          } as any);
-          previews[index] = res;
+    isAutoUpdatingThanhTienTonRef.current = true;
+    try {
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        const nhom = currentNhomList.find((n) => n.id === Number(item?.nhomSanPhamId));
+        const canPreview = item && item.nhomSanPhamId && item.loaiTonId && Number(item.soLuong) > 0 && hasAllDimensions(item, nhom);
+        if (canPreview) {
+          try {
+            const res = await previewCalculation({
+              ...item,
+              thueSuat: (item.thueSuat ?? 0) / 100,
+            } as any);
+            previews[index] = res;
 
-          // Tự động điền Giá tôn từ kết quả tính toán nếu người dùng chưa nhập thủ công
-          if (item.thanhTienTon === undefined || item.thanhTienTon === null) {
-            form.setFieldValue(['lineInputs', index, 'thanhTienTon'], Math.round(res.thanhTienTon));
+            // Giá tôn = tiền tôn/1 cái; gợi ý = đơn giá/mét tới × ∑Ssx mét tới (không × SL)
+            const ton = loaiTonList.find((t) => t.id === Number(item.loaiTonId));
+            if (!isThanhTienTonManual(item, index) && ton) {
+              form.setFieldValue(
+                ['lineInputs', index, 'thanhTienTon'],
+                suggestThanhTienTon(ton.donGiaMetToi, res.dienTichSanXuatMetToi),
+              );
+            }
+          } catch {
+            // Bỏ qua lỗi preview của dòng này để không làm hỏng toàn bộ form.
           }
-        } catch {
-          // Bỏ qua lỗi preview của dòng này để không làm hỏng toàn bộ form.
         }
       }
+    } finally {
+      isAutoUpdatingThanhTienTonRef.current = false;
     }
     setLinePreviews(previews);
+    return previews;
   };
 
   /** Mở modal F4 chọn dòng từ đơn hàng cũ cho dòng `lineIndex`. */
@@ -440,6 +556,11 @@ export default function OrderFormPage() {
       });
       return next;
     });
+    thanhTienTonManualLinesRef.current = remapIndexSetAfterMove(
+      thanhTienTonManualLinesRef.current,
+      fromIndex,
+      toIndex,
+    );
   };
 
   /** Di chuyển dòng từ `fromIndex` sang `toIndex`, cập nhật preview và dòng đệm. */
@@ -506,6 +627,7 @@ export default function OrderFormPage() {
 
   /** Áp dụng dòng lịch sử (F4) vào dòng form hiện tại. */
   const applyHistoryLine = async (lineIndex: number, item: BaoGiaLineHistory) => {
+    const historyTonTotal = item.thanhTienTon;
     const lines = [...(form.getFieldValue('lineInputs') || [])];
     lines[lineIndex] = {
       ...lines[lineIndex],
@@ -521,40 +643,51 @@ export default function OrderFormPage() {
       giaNhanCong: item.giaNhanCong ?? 0,
       phuKien: item.phuKien ?? 0,
       ghiChu: item.ghiChu ?? undefined,
-      thanhTienTon: item.thanhTienTon,
+      thanhTienTonManual: false,
     };
     form.setFieldsValue({ lineInputs: lines });
     setHistoryOpen(false);
     ensureNewRowIfNeeded({ lineInputs: lines });
-    await refreshPreviews({ lineInputs: lines });
+    const previews = await refreshPreviews({ lineInputs: form.getFieldValue('lineInputs') || lines });
+    const preview = previews[lineIndex];
+    if (preview && historyTonTotal > 0) {
+      isAutoUpdatingThanhTienTonRef.current = true;
+      form.setFieldValue(['lineInputs', lineIndex, 'thanhTienTon'], thanhTienTonTotalToPerPiece(historyTonTotal, item.soLuong));
+      markManualTonLine(lineIndex);
+      isAutoUpdatingThanhTienTonRef.current = false;
+    }
   };
 
   /**
    * Tính tổng theo các preview đã có và thuế suất hiện tại.
-   * @returns Tổng tiền trước thuế, tiền thuế và tổng sau thuế.
+   * Thuế VAT được nhóm theo từng mức % (mỗi loại một dòng).
    */
   const calculateTotals = () => {
     let totalThanhTien = 0;
-    const items = form.getFieldValue('lineInputs') || [];
-    let totalThue = 0;
+    const items = withManualTonFlags(form.getFieldValue('lineInputs') || []);
+    const thueByRate = new Map<number, number>();
 
     items.forEach((item: LineFormValues, index: number) => {
       const preview = linePreviews[index];
       if (preview) {
-        // Tính lại tổng dòng dựa trên giá trị Giá tôn thực tế trong form (có thể đã bị ghi đè)
-        const currentThanhTienTon = item.thanhTienTon ?? preview.thanhTienTon;
-        const adjustedTotal = preview.thanhTien + (currentThanhTienTon - preview.thanhTienTon);
-        const soLuong = item.soLuong || 1;
-        const unitPrice = soLuong > 0 ? Math.round(adjustedTotal / soLuong) : 0;
-        const lineThanhTien = unitPrice * soLuong;
-        totalThanhTien += lineThanhTien;
-        totalThue += lineThanhTien * ((item?.thueSuat ?? 0) / 100);
+        const ton = loaiTonList.find((t) => t.id === Number(item.loaiTonId));
+        const { lineTotal } = calcLinePricing(preview, item, ton?.donGiaMetToi);
+        totalThanhTien += lineTotal;
+        const rate = Number(item?.thueSuat ?? 0);
+        const lineThue = lineTotal * (rate / 100);
+        thueByRate.set(rate, (thueByRate.get(rate) ?? 0) + lineThue);
       }
     });
+
+    const thueTheoLoai = [...thueByRate.entries()]
+      .map(([thueSuat, tienThue]) => ({ thueSuat, tienThue }))
+      .sort((a, b) => a.thueSuat - b.thueSuat);
+    const totalThue = thueTheoLoai.reduce((sum, g) => sum + g.tienThue, 0);
 
     return {
       tongTien: totalThanhTien,
       thueTien: totalThue,
+      thueTheoLoai,
       tongTienSauThue: totalThanhTien + totalThue,
     };
   };
@@ -602,9 +735,11 @@ export default function OrderFormPage() {
    * @param _ Giá trị thay đổi, không dùng trực tiếp.
    * @param allValues Toàn bộ giá trị form hiện tại.
    */
-  const onValuesChange = async (_: any, allValues: any) => {
+  const onValuesChange = async (changedValues: any, allValues: any) => {
     try {
-      await refreshPreviews(allValues);
+      markManualTonFromChange(changedValues);
+      const lineInputs = withManualTonFlags(allValues.lineInputs || []);
+      await refreshPreviews({ ...allValues, lineInputs });
       const items = allValues.lineInputs || [];
       const rowWithNhom = [...items].reverse().find((item) => item?.nhomSanPhamId);
       if (rowWithNhom?.nhomSanPhamId) {
@@ -794,7 +929,7 @@ export default function OrderFormPage() {
                       <div className="price-field-row">
                         <FieldLabel>Loại sản phẩm</FieldLabel>
                         <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}>
-                          <HintSelect placeholder="Chọn loại" options={nhomList.map((n) => ({ value: n.id, label: n.tenNhom }))} />
+                          <HintSelect placeholder="Chọn loại" options={getNhomSelectOptions(field.name)} />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
@@ -923,7 +1058,7 @@ export default function OrderFormPage() {
                           </span>
                         </div>
                         <div className="price-field-row">
-                          <FieldLabel>Ssx (m)</FieldLabel>
+                          <FieldLabel>Ssx (mét tới)</FieldLabel>
                           <span className="display-value area-display-value" title={`∑Ssx mét tới: ${formatArea(preview.dienTichSanXuatMetToi)} m`}>
                             {formatArea(preview.dienTichSanXuatMetToi)}
                           </span>
@@ -940,13 +1075,26 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
-                        <FieldLabel>Giá tôn (VNĐ)</FieldLabel>
+                        <FieldLabel>Giá tôn</FieldLabel>
                         <Form.Item name={[field.name, 'thanhTienTon']} noStyle>
-                          <HintInputNumber min={0} step={1000} precision={0} controls={false} style={{ width: '100%' }} tooltip="Giá tôn (VNĐ)" {...moneyInputNumberProps} />
+                          <HintInputNumber
+                            min={0}
+                            step={1000}
+                            precision={0}
+                            controls={false}
+                            style={{ width: '100%' }}
+                            tooltip="Tiền tôn cho 1 cái (có thể sửa). Gợi ý tự động khi đổi loại tôn/kích thước nếu chưa nhập tay"
+                            {...moneyInputNumberProps}
+                            onChange={() => {
+                              if (!isAutoUpdatingThanhTienTonRef.current) {
+                                markManualTonLine(field.name);
+                              }
+                            }}
+                          />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <FieldLabel>Giá nhân công (VNĐ)</FieldLabel>
+                        <FieldLabel>Giá nhân công</FieldLabel>
                         <Form.Item
                           name={[field.name, 'giaNhanCong']}
                           noStyle
@@ -956,7 +1104,7 @@ export default function OrderFormPage() {
                           </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <FieldLabel>Phụ kiện đi kèm (VNĐ)</FieldLabel>
+                        <FieldLabel>Phụ kiện đi kèm</FieldLabel>
                         <Form.Item
                           name={[field.name, 'phuKien']}
                           noStyle
@@ -1009,12 +1157,10 @@ export default function OrderFormPage() {
                   render: (_: any, field: any) => {
                     const preview = linePreviews[field.name];
                     if (!preview) return '-';
-                    const item = form.getFieldValue(['lineInputs', field.name]);
-                    const currentThanhTienTon = item?.thanhTienTon ?? preview.thanhTienTon;
-                    const adjustedTotal = preview.thanhTien + (currentThanhTienTon - preview.thanhTienTon);
-                    const soLuong = item?.soLuong || 1;
-                    const unitPrice = soLuong > 0 ? Math.round(adjustedTotal / soLuong) : 0;
-                    const lineTotal = unitPrice * soLuong;
+                    const lines = withManualTonFlags(form.getFieldValue('lineInputs') || []);
+                    const item = lines[field.name];
+                    const ton = loaiTonList.find((t) => t.id === Number(item?.loaiTonId));
+                    const { unitPrice, lineTotal } = calcLinePricing(preview, item ?? {}, ton?.donGiaMetToi);
                     const unitPriceText = formatMoney(unitPrice);
                     const lineTotalText = formatMoney(lineTotal);
                     return (
@@ -1214,17 +1360,28 @@ export default function OrderFormPage() {
                                 <span style={{ fontWeight: 'bold' }}>Tổng trước thuế:</span>
                                 <span style={{ fontWeight: 'bold', color: '#1677ff', textAlign: 'right' }}>{formatMoney(totals.tongTien)} đ</span>
                               </div>
+                              {totals.thueTheoLoai
+                                .filter((group) => group.tienThue > 0)
+                                .map((group) => (
+                                  <div
+                                    key={group.thueSuat}
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: '200px auto',
+                                      gap: '16px',
+                                      alignItems: 'center',
+                                      color: '#666',
+                                    }}
+                                  >
+                                    <span>Thuế VAT {group.thueSuat}%:</span>
+                                    <span style={{ textAlign: 'right' }}>{formatMoney(Math.round(group.tienThue))} đ</span>
+                                  </div>
+                                ))}
                               {totals.thueTien > 0 && (
-                                <>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', color: '#666' }}>
-                                    <span>Thuế VAT:</span>
-                                    <span style={{ textAlign: 'right' }}>{formatMoney(totals.thueTien)} đ</span>
-                                  </div>
-                                  <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', paddingTop: '8px', borderTop: '2px solid #ff7a45', fontWeight: 'bold', color: '#ff7a45', fontSize: '16px' }}>
-                                    <span>Tổng sau thuế:</span>
-                                    <span style={{ textAlign: 'right' }}>{formatMoney(totals.tongTienSauThue)} đ</span>
-                                  </div>
-                                </>
+                                <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', paddingTop: '8px', borderTop: '2px solid #ff7a45', fontWeight: 'bold', color: '#ff7a45', fontSize: '16px' }}>
+                                  <span>Tổng sau thuế:</span>
+                                  <span style={{ textAlign: 'right' }}>{formatMoney(Math.round(totals.tongTienSauThue))} đ</span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1232,7 +1389,7 @@ export default function OrderFormPage() {
                       </div>
                     )}
                   />
-                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(nhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
+                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(orderableNhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
                     Thêm dòng mới
                   </Button>
                   {/* CSS cục bộ cho bảng cụm sản phẩm (layout cột, ellipsis, sticky) */}

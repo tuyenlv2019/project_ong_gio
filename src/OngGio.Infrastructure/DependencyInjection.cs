@@ -239,14 +239,14 @@ public static class DependencyInjection
             {
                 ThuongHieu = "Tôn Hoa Sen",
                 DoDay = 0.58m,
-                DonGiaM2 = 185_000m,
+                DonGiaMetToi = 222_000m,
                 KgMoiMetToi = 4.5m
             },
             new LoaiTon
             {
                 ThuongHieu = "Tôn Phương Nam",
                 DoDay = 0.75m,
-                DonGiaM2 = 210_000m,
+                DonGiaMetToi = 252_000m,
                 KgMoiMetToi = 5.8m
             });
 

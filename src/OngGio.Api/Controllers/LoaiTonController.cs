@@ -54,7 +54,7 @@ public class LoaiTonController : ControllerBase
         {
             ThuongHieu = request.ThuongHieu,
             DoDay = request.DoDay,
-            DonGiaM2 = request.DonGiaM2,
+            DonGiaMetToi = request.DonGiaMetToi,
             KgMoiMetToi = request.KgMoiMetToi
         };
         _db.LoaiTons.Add(item);
@@ -77,7 +77,7 @@ public class LoaiTonController : ControllerBase
 
         item.ThuongHieu = request.ThuongHieu;
         item.DoDay = request.DoDay;
-        item.DonGiaM2 = request.DonGiaM2;
+        item.DonGiaMetToi = request.DonGiaMetToi;
         item.KgMoiMetToi = request.KgMoiMetToi;
 
         await _db.SaveChangesAsync(ct);
@@ -104,5 +104,5 @@ public class LoaiTonController : ControllerBase
 public record LoaiTonRequest(
     string ThuongHieu,
     decimal DoDay,
-    decimal DonGiaM2,
+    decimal DonGiaMetToi,
     decimal KgMoiMetToi);

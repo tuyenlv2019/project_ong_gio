@@ -68,7 +68,7 @@ public class CalculationEngineTests
 
         DoDay = 0.58m,
 
-        DonGiaM2 = 185_000m,
+        DonGiaMetToi = 222_000m,
 
         KgMoiMetToi = 4.5m
 
@@ -132,7 +132,7 @@ public class CalculationEngineTests
 
     [Fact]
 
-    public async Task TinhTheoDonGiaM2_KhiTongDienTichNhoHon1m2()
+    public async Task TinhTheoDonGiaMetToi_KhiTongDienTichNhoHon1m2()
 
     {
 
@@ -144,7 +144,7 @@ public class CalculationEngineTests
 
         Assert.False(result.ApDungGiaSan);
 
-        Assert.Equal(Math.Round(result.TongDienTichLo * 185_000m, 0, MidpointRounding.AwayFromZero), result.ThanhTienTon);
+        Assert.Equal(Math.Round(result.TongDienTichLo * 222_000m / 1.2m, 0, MidpointRounding.AwayFromZero), result.ThanhTienTon);
 
         Assert.Equal(result.DienTichSx1Cai / 1.2m, result.DienTichSanXuatMetToi);
 
@@ -175,6 +175,40 @@ public class CalculationEngineTests
         var expectedThanhTien = result.DonGiaCuoi * request.SoLuong;
 
         Assert.Equal(expectedThanhTien, result.ThanhTien);
+
+    }
+
+
+
+    [Fact]
+
+    public async Task DonGiaCuoi_KhongPhuThuocSoLuong()
+
+    {
+
+        var thamSo = new Dictionary<string, decimal>(StringComparer.Ordinal) { ["r"] = 150 };
+
+        var resultSl1 = await _engine.CalculateAsync(
+
+            Co90Nhom(), LoaiTonMau(), ThamSoFormCo90(),
+
+            new CalculationRequest(1, 1, 300, 300, 1, 20_000m, 5_000m, thamSo));
+
+        var resultSl5 = await _engine.CalculateAsync(
+
+            Co90Nhom(), LoaiTonMau(), ThamSoFormCo90(),
+
+            new CalculationRequest(1, 1, 300, 300, 5, 20_000m, 5_000m, thamSo));
+
+
+
+        Assert.Equal(resultSl1.DonGiaCuoi, resultSl5.DonGiaCuoi);
+
+        Assert.Equal(
+
+            Math.Round(222_000m * resultSl1.DienTichSanXuatMetToi + 20_000m + 5_000m, 0, MidpointRounding.AwayFromZero),
+
+            resultSl1.DonGiaCuoi);
 
     }
 

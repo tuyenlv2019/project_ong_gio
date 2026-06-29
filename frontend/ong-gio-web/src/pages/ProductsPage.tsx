@@ -2,7 +2,7 @@
  * Trang quản lý nhóm sản phẩm: công thức ∑Ssx và tham số nhập trên form đơn hàng.
  */
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
 import FormulaDisplay from '../components/FormulaDisplay';
@@ -32,6 +32,7 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NhomSanPham | null>(null);
   const [form] = Form.useForm();
+  const [formulaCopyKey, setFormulaCopyKey] = useState(0);
 
   const load = async () => setData(await getNhomSanPhams());
   useEffect(() => {
@@ -42,6 +43,37 @@ export default function ProductsPage() {
     () => filterBySearch(data, search, getProductSearchText),
     [data, search],
   );
+
+  /** Các loại SP khác đang có công thức — dùng cho chức năng sao chép. */
+  const formulaCopySources = useMemo(
+    () => data.filter((n) => n.congThucDienTich?.trim() && n.id !== editing?.id),
+    [data, editing?.id],
+  );
+
+  const copyFormulaFromProduct = (sourceId: number) => {
+    const source = data.find((n) => n.id === sourceId);
+    if (!source?.congThucDienTich?.trim()) return;
+
+    const applyCopy = () => {
+      form.setFieldValue('congThucDienTich', source.congThucDienTich);
+      setFormulaCopyKey((k) => k + 1);
+      message.success(`Đã sao chép công thức từ "${source.tenNhom}"`);
+    };
+
+    const currentFormula = String(form.getFieldValue('congThucDienTich') ?? '').trim();
+    if (currentFormula) {
+      Modal.confirm({
+        title: 'Ghi đè công thức hiện tại?',
+        content: `Sao chép công thức từ "${source.tenNhom}" vào ô đang nhập.`,
+        okText: 'Sao chép',
+        cancelText: 'Hủy',
+        onOk: applyCopy,
+      });
+      return;
+    }
+
+    applyCopy();
+  };
 
   const openModal = (item?: NhomSanPham) => {
     setEditing(item ?? null);
@@ -55,6 +87,7 @@ export default function ProductsPage() {
         { tenThamSo: 'L' },
       ],
     });
+    setFormulaCopyKey((k) => k + 1);
     setOpen(true);
   };
 
@@ -195,15 +228,44 @@ export default function ProductsPage() {
             <ProductImageField />
           </Form.Item>
           <Form.Item
-            name="congThucDienTich"
             label="Công thức tính diện tích ∑Ssx (m²)"
-            rules={[{ required: true, message: 'Nhập công thức diện tích' }]}
+            required
             extra="Mỗi dòng: TênBiến = biểu thức. Dòng cuối: Ssx = ... Dùng tên tham số ở trên (W, H, L, r, ...). Hỗ trợ + - * /, if(), sqrt()."
           >
-            <Input.TextArea
-              rows={6}
-              placeholder={'R = r + W\nS_matcong = (R + 58) * (R + 58) * 2 / 1000000\nSsx = S_matcong + ...'}
-            />
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Select
+                key={formulaCopyKey}
+                showSearch
+                allowClear
+                placeholder={
+                  formulaCopySources.length > 0
+                    ? 'Sao chép công thức từ sản phẩm có sẵn...'
+                    : 'Chưa có sản phẩm khác có công thức để sao chép'
+                }
+                disabled={formulaCopySources.length === 0}
+                optionFilterProp="label"
+                style={{ width: '100%' }}
+                options={formulaCopySources.map((n) => ({
+                  value: n.id,
+                  label: n.tenNhom,
+                }))}
+                onChange={(value) => {
+                  if (value !== undefined && value !== null) {
+                    copyFormulaFromProduct(Number(value));
+                  }
+                }}
+              />
+              <Form.Item
+                name="congThucDienTich"
+                noStyle
+                rules={[{ required: true, message: 'Nhập công thức diện tích' }]}
+              >
+                <Input.TextArea
+                  rows={6}
+                  placeholder={'R = r + W\nS_matcong = (R + 58) * (R + 58) * 2 / 1000000\nSsx = S_matcong + ...'}
+                />
+              </Form.Item>
+            </Space>
           </Form.Item>
           <Form.List name="thamSo">
             {(fields, { add, remove }) => (
