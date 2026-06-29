@@ -1,7 +1,15 @@
 /**
- * Trang tạo/sửa báo giá với preview tính toán theo từng dòng.
+ * Trang tạo/sửa báo giá (đơn hàng) với preview tính toán theo từng dòng.
+ *
+ * Chức năng chính:
+ * - Tạo mới / sửa / sao chép đơn hàng (`?copyFrom=id`)
+ * - Nhập nhiều dòng sản phẩm trong bảng Form.List
+ * - Preview diện tích, khối lượng, giá trị qua API `/api/calculation/preview`
+ * - F4 tại Tên sản phẩm: chọn dòng từ đơn hàng cũ
+ * - Di chuyển / xóa dòng; header sticky khi cuộn trang
  */
 
+// --- Thư viện UI & routing ---
 import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined, CopyOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,7 +25,9 @@ import {
   TRANG_THAI_DON,
   updateBaoGia,
 } from '../api';
+// --- Kiểu dữ liệu ---
 import type { BaoGiaLineHistory, CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../types';
+// --- Component & util nội bộ ---
 import FormulaDisplay from '../components/FormulaDisplay';
 import EllipsisText from '../components/EllipsisText';
 import HintInput from '../components/HintInput';
@@ -30,6 +40,14 @@ import { resolveMasterImageUrl } from '../utils/imageUrl';
 
 const { Title, Text } = Typography;
 
+/** Tổng chiều rộng tối thiểu bảng cụm sản phẩm (sum width các cột). */
+const ORDER_PRODUCT_TABLE_SCROLL_X = 1379;
+
+// =============================================================================
+// Helper UI nhỏ
+// =============================================================================
+
+/** Nhãn cột con trong ô bảng — rút gọn bằng ellipsis khi chật. */
 function FieldLabel({ children }: { children: string }) {
   return <EllipsisText className="price-field-label">{children}</EllipsisText>;
 }
@@ -41,6 +59,11 @@ function formatArea(value: number) {
   return value.toFixed(6);
 }
 
+// =============================================================================
+// Helper kích thước & validation dòng
+// =============================================================================
+
+/** Mô tả một ô kích thước map vào field form (`w`, `h` hoặc `thamSoNhap`). */
 type DimensionField = {
   key: string;
   label: string;
@@ -48,6 +71,10 @@ type DimensionField = {
   paramKey?: string;
 };
 
+/**
+ * Map tên tham số DB sang field form.
+ * W/Wmax → `w`, H/Hmax → `h`, còn lại → `thamSoNhap[key]`.
+ */
 function mapParamToDimensionField(tenThamSo: string): DimensionField {
   const label = tenThamSo;
   const normalized = tenThamSo.trim().toLowerCase();
@@ -79,6 +106,7 @@ function getDimensionFields(nhom?: NhomSanPham): DimensionField[] {
   return fields;
 }
 
+/** Lấy giá trị kích thước từ dòng form theo cấu hình DimensionField. */
 function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField) {
   if (field.target === 'thamSoNhap') {
     return item.thamSoNhap?.[field.paramKey ?? field.key];
@@ -87,17 +115,20 @@ function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField)
   return field.target === 'w' ? item.w : item.h;
 }
 
+/** Kiểm tra giá trị số đã nhập và > 0. */
 function isFilledNumber(value: unknown) {
   const num = Number(value);
   return Number.isFinite(num) && num > 0;
 }
 
+/** Dòng đã nhập đủ mọi tham số kích thước theo loại sản phẩm. */
 function hasAllDimensions(item: Partial<LineFormValues> | undefined, nhom?: NhomSanPham) {
   if (!item || !nhom) return false;
   const dimensionFields = getDimensionFields(nhom);
   return dimensionFields.every((field) => isFilledNumber(getDimensionValue(item, field)));
 }
 
+/** Danh sách thông báo thiếu sót của một dòng (dùng khi validate trước lưu). */
 function getMissingLineMessages(item: Partial<LineFormValues>, nhom?: NhomSanPham): string[] {
   const messages: string[] = [];
   if (!item.tenSanPham?.trim()) messages.push('chưa nhập Tên sản phẩm');
@@ -119,6 +150,7 @@ function getMissingLineMessages(item: Partial<LineFormValues>, nhom?: NhomSanPha
   return messages;
 }
 
+/** Gộp thông báo thiếu sót thành một chuỗi hiển thị cho dòng `lineIndex`. */
 function describeIncompleteLine(
   lineIndex: number,
   item: Partial<LineFormValues>,
@@ -129,6 +161,7 @@ function describeIncompleteLine(
   return `Dòng ${lineIndex + 1} (${displayName}): ${missingMessages.join('; ')}`;
 }
 
+/** Hiển thị toast cảnh báo nhiều dòng — font lớn cho dễ đọc trên form rộng. */
 function showMultiLineWarning(messages: string[]) {
   message.warning({
     className: 'order-form-validation-message',
@@ -145,6 +178,7 @@ function showMultiLineWarning(messages: string[]) {
   });
 }
 
+/** Hiển thị toast cảnh báo một dòng — font lớn. */
 function showLargeWarning(text: string) {
   message.warning({
     className: 'order-form-validation-message',
@@ -153,6 +187,7 @@ function showLargeWarning(text: string) {
   });
 }
 
+/** Dòng có bất kỳ dữ liệu nhập nào (dùng phân biệt dòng trống vs dòng đang nhập dở). */
 function hasAnyLineInput(item: Partial<LineFormValues> | undefined) {
   if (!item) return false;
   return Boolean(
@@ -186,8 +221,12 @@ function getMovableRowCount(items: Partial<LineFormValues>[]) {
   return lastIsBuffer ? items.length - 1 : items.length;
 }
 
+/** Giá trị mặc định khi thêm dòng sản phẩm mới. */
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
 
+/**
+ * Tạo object dòng rỗng; nếu có master data thì gán loại SP/tôn đầu tiên.
+ */
 function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
   if (nhoms?.[0] && tons?.[0]) {
     return {
@@ -209,6 +248,7 @@ function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
  * @returns Giao diện tạo hoặc sửa báo giá.
  */
 export default function OrderFormPage() {
+  // --- Routing: sửa theo id hoặc sao chép từ ?copyFrom= ---
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
@@ -219,12 +259,18 @@ export default function OrderFormPage() {
     return Number(raw);
   }, [isEdit, searchParams]);
   const navigate = useNavigate();
+
+  // --- Form Ant Design & theo dõi dòng sản phẩm ---
   const [form] = Form.useForm();
   const lineInputs = Form.useWatch('lineInputs', form);
+
+  // --- Master data & kết quả tính toán ---
   const [nhomList, setNhomList] = useState<NhomSanPham[]>([]);
   const [loaiTonList, setLoaiTonList] = useState<LoaiTon[]>([]);
   const [preview, setPreview] = useState<CalculationResult | null>(null);
   const [linePreviews, setLinePreviews] = useState<Record<number, CalculationResult>>({});
+
+  // --- UI state ---
   const [loading, setLoading] = useState(false);
   const [selectedNhomRow, setSelectedNhomRow] = useState<NhomSanPham | undefined>(undefined);
   const [requiredHeaders] = useState<string[]>([]);
@@ -233,9 +279,12 @@ export default function OrderFormPage() {
   const [movePopoverIndex, setMovePopoverIndex] = useState<number | null>(null);
   const [moveTargetStt, setMoveTargetStt] = useState<number>(1);
   const [copySourceMa, setCopySourceMa] = useState<string | null>(null);
+
+  // --- Sticky header: đo chiều cao khối Thông tin đơn + Cụm SP cho offset bảng ---
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [productTableStickyOffset, setProductTableStickyOffset] = useState(180);
 
+  /** Cập nhật offset header bảng khi khối sticky đổi kích thước (resize / copy banner). */
   useEffect(() => {
     const stickyHeader = stickyHeaderRef.current;
     if (!stickyHeader) return;
@@ -255,6 +304,12 @@ export default function OrderFormPage() {
     };
   }, [copySourceMa]);
 
+  /**
+   * Load master data và khởi tạo form:
+   * - Sửa: nạp báo giá theo `id`
+   * - Sao chép: nạp từ `copyFromId`, bỏ tên KH, reset trạng thái
+   * - Tạo mới: một dòng rỗng
+   */
   useEffect(() => {
     (async () => {
       const [nhoms, tons] = await Promise.all([getNhomSanPhams(), getLoaiTons()]);
@@ -362,11 +417,13 @@ export default function OrderFormPage() {
     setLinePreviews(previews);
   };
 
+  /** Mở modal F4 chọn dòng từ đơn hàng cũ cho dòng `lineIndex`. */
   const openLineHistory = (lineIndex: number) => {
     setHistoryLineIndex(lineIndex);
     setHistoryOpen(true);
   };
 
+  /** Đồng bộ `linePreviews` sau khi Form.List move (index preview theo dòng). */
   const remapLinePreviewsAfterMove = (fromIndex: number, toIndex: number) => {
     setLinePreviews((prev) => {
       const len = Math.max(
@@ -385,6 +442,7 @@ export default function OrderFormPage() {
     });
   };
 
+  /** Di chuyển dòng từ `fromIndex` sang `toIndex`, cập nhật preview và dòng đệm. */
   const handleMoveLineTo = async (
     fromIndex: number,
     toIndex: number,
@@ -412,6 +470,7 @@ export default function OrderFormPage() {
     await refreshPreviews({ lineInputs: finalLines });
   };
 
+  /** Di chuyển lên/xuống một bậc. */
   const handleMoveLine = async (
     fromIndex: number,
     direction: 'up' | 'down',
@@ -421,6 +480,7 @@ export default function OrderFormPage() {
     await handleMoveLineTo(fromIndex, toIndex, move);
   };
 
+  /** Xác nhận di chuyển dòng đến STT người dùng nhập trong popover. */
   const confirmMoveToStt = async (
     fromIndex: number,
     move: (from: number, to: number) => void,
@@ -444,6 +504,7 @@ export default function OrderFormPage() {
     setMovePopoverIndex(null);
   };
 
+  /** Áp dụng dòng lịch sử (F4) vào dòng form hiện tại. */
   const applyHistoryLine = async (lineIndex: number, item: BaoGiaLineHistory) => {
     const lines = [...(form.getFieldValue('lineInputs') || [])];
     lines[lineIndex] = {
@@ -498,6 +559,10 @@ export default function OrderFormPage() {
     };
   };
 
+  /**
+   * Kiểm tra dòng chưa đủ thông tin để highlight đỏ trên bảng.
+   * Bỏ qua dòng đệm cuối và dòng hoàn toàn trống.
+   */
   const isRowIncomplete = (item: any, lineIndex?: number, totalLines?: number) => {
     if (
       lineIndex !== undefined &&
@@ -637,6 +702,7 @@ export default function OrderFormPage() {
 
   return (
     <div>
+      {/* Tiêu đề trang + nút sao chép khi đang sửa */}
       <Space align="center" style={{ marginBottom: copySourceMa ? 0 : 16 }}>
         <Title level={3} style={{ margin: 0 }}>
           {isEdit ? 'Sửa đơn hàng' : copySourceMa ? 'Tạo đơn hàng mới (sao chép)' : 'Tạo đơn hàng mới'}
@@ -650,6 +716,7 @@ export default function OrderFormPage() {
           </Button>
         )}
       </Space>
+      {/* Banner khi đang tạo đơn từ sao chép */}
       {copySourceMa && (
         <Alert
           type="info"
@@ -666,6 +733,7 @@ export default function OrderFormPage() {
           required: 'Vui lòng nhập ${label}',
         }}
       >
+        {/* Khối sticky: Thông tin đơn hàng + tiêu đề Cụm sản phẩm */}
         <div ref={stickyHeaderRef} className="order-form-sticky-header">
           <Card title="Thông tin đơn hàng" className="order-order-info-card">
             <Row gutter={16}>
@@ -700,10 +768,13 @@ export default function OrderFormPage() {
           </div>
         </div>
 
+        {/* Bảng nhập dòng sản phẩm (Form.List + Table) */}
         <Card className="order-product-cluster-card">
           <Form.List name="lineInputs">
             {(fields, { add, remove, move }) => {
+              /** Định nghĩa cột bảng cụm sản phẩm — mỗi cột render Form.Item theo field.name */
               const columns: any[] = [
+                // Cột STT (tự tính từ index)
                 {
                   title: 'STT',
                   dataIndex: 'stt',
@@ -713,6 +784,7 @@ export default function OrderFormPage() {
                   onCell: () => ({ className: 'order-stt-column' }),
                   render: (_: any, __: any, idx: number) => idx + 1,
                 },
+                // Cột loại SP + tên SP (F4 mở lịch sử)
                 {
                   title: 'Sản phẩm',
                   dataIndex: 'sanPham',
@@ -751,6 +823,7 @@ export default function OrderFormPage() {
                     </div>
                   ),
                 },
+                // Cột kích thước động theo tham số loại SP (DB)
                 {
                   title: 'Kích thước (mm)',
                   dataIndex: 'kichThuoc',
@@ -794,6 +867,7 @@ export default function OrderFormPage() {
                     );
                   },
                 },
+                // Cột loại tôn + khối lượng (preview)
                 {
                   title: 'Thông tin tôn',
                   dataIndex: 'loaiTonTrongLuong',
@@ -829,6 +903,7 @@ export default function OrderFormPage() {
                     );
                   },
                 },
+                // Cột diện tích sản xuất (chỉ đọc từ preview)
                 {
                   title: 'Diện tích Sx',
                   dataIndex: 'dienTichSx',
@@ -857,6 +932,7 @@ export default function OrderFormPage() {
                     );
                   },
                 },
+                // Cột chi phí nhập tay: giá tôn, nhân công, phụ kiện
                 {
                   title: 'Chi phí (VNĐ)',
                   dataIndex: 'giaTri',
@@ -892,6 +968,7 @@ export default function OrderFormPage() {
                     </div>
                   ),
                 },
+                // Cột đơn vị, số lượng, thuế suất
                 {
                   title: 'Thông tin dòng',
                   dataIndex: 'donViSoLuongThue',
@@ -921,6 +998,7 @@ export default function OrderFormPage() {
                     </div>
                   ),
                 },
+                // Cột đơn giá / thành tiền (tính từ preview, có thể điều chỉnh qua giá tôn)
                 {
                   title: 'Giá trị (VNĐ)',
                   dataIndex: 'donGiaThanhTien',
@@ -957,6 +1035,7 @@ export default function OrderFormPage() {
                     );
                   },
                 },
+                // Cột ghi chú + ảnh minh họa master loại SP
                 {
                   title: 'Ghi chú & hình ảnh',
                   dataIndex: 'ghiChuHinhAnh',
@@ -998,6 +1077,7 @@ export default function OrderFormPage() {
                     );
                   },
                 },
+                // Cột di chuyển / xóa dòng
                 {
                   title: 'Thao tác',
                   dataIndex: 'action',
@@ -1104,6 +1184,7 @@ export default function OrderFormPage() {
                 },
               ];
 
+              // Tổng tiền footer bảng + highlight dòng lỗi
               const totals = calculateTotals();
               const items = form.getFieldValue('lineInputs') || [];
 
@@ -1117,7 +1198,7 @@ export default function OrderFormPage() {
                     pagination={false}
                     tableLayout="fixed"
                     sticky={{ offsetHeader: productTableStickyOffset }}
-                    scroll={{ x: 1379 }}
+                    scroll={{ x: ORDER_PRODUCT_TABLE_SCROLL_X }}
                     locale={{ emptyText: 'Chưa có dòng sản phẩm' }}
                     rowClassName={(_, __, index) => {
                       const item = items[index];
@@ -1154,6 +1235,7 @@ export default function OrderFormPage() {
                   <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(nhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
                     Thêm dòng mới
                   </Button>
+                  {/* CSS cục bộ cho bảng cụm sản phẩm (layout cột, ellipsis, sticky) */}
                   <style>{`
                     .order-product-table .price-fields-stack {
                       display: grid;
@@ -1341,6 +1423,7 @@ export default function OrderFormPage() {
               );
             }}
           </Form.List>
+          {/* Công thức ∑Ssx của loại SP đang chọn (collapse) */}
           {selectedNhomRow && (() => {
             const thamSoItems =
               selectedNhomRow.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo })) ?? [];
@@ -1372,6 +1455,7 @@ export default function OrderFormPage() {
             />
             );
           })()}
+          {/* Preview tổng hợp một dòng (legacy block — hiếm khi hiển thị) */}
           {preview && (
             <Card size="small" style={{ marginTop: 16, background: '#fafafa' }}>
               <Space wrap>
@@ -1387,13 +1471,14 @@ export default function OrderFormPage() {
           )}
         </Card>
 
-
+        {/* Nút lưu / hủy */}
         <Space style={{ marginTop: 16 }}>
           <Button type="primary" size="large" loading={loading} onClick={save}>Lưu đơn hàng</Button>
           <Button onClick={() => navigate('/don-hang')}>Hủy</Button>
         </Space>
       </Form>
 
+      {/* Modal F4: chọn sản phẩm từ đơn hàng cũ */}
       <LineHistoryPickerModal
         open={historyOpen}
         initialSearch={
