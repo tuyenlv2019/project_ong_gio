@@ -12,7 +12,7 @@
 // --- Thư viện UI & routing ---
 import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
 import { ArrowDownOutlined, ArrowUpOutlined, CopyOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   createBaoGia,
@@ -38,10 +38,20 @@ import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } fro
 import {
   mapBaoGiaToLineInputs,
   suggestThanhTienTon,
-  thanhTienTonPerPieceToGiaTonMetToi,
   thanhTienTonTotalToPerPiece,
 } from '../utils/baoGiaFormMapper';
-import { resolveMasterImageUrl } from '../utils/imageUrl';
+import {
+  PREVIEW_DEBOUNCE_MS,
+  buildLinePreviewSignature,
+  getLineIndicesNeedingPreviewRefresh,
+  nhomSelectionChanged,
+} from '../utils/orderFormPreview';
+import {
+  DimensionFieldsCell,
+  LineGhiChuImageCell,
+  LineValueCell,
+  OrderTotalsFooter,
+} from '../components/order/OrderLineCells';
 
 const { Title, Text } = Typography;
 
@@ -235,34 +245,6 @@ function getMovableRowCount(items: Partial<LineFormValues>[]) {
   return lastIsBuffer ? items.length - 1 : items.length;
 }
 
-/**
- * Tính đơn giá / thành tiền dòng.
- * Đơn giá = giá tôn (đ/mét tới) × ∑Ssx mét tới + nhân công + phụ kiện.
- * Ô Giá tôn = tiền tôn/1 cái (không đổi khi đổi số lượng).
- */
-function calcLinePricing(
-  preview: CalculationResult,
-  item: Partial<LineFormValues>,
-  donGiaMetToiFallback?: number,
-): { unitPrice: number; lineTotal: number; giaTonMetToi: number } {
-  const soLuong = Number(item.soLuong) || 1;
-  const metToi = preview.dienTichSanXuatMetToi;
-  const giaNhanCong = Number(item.giaNhanCong) || 0;
-  const phuKien = Number(item.phuKien) || 0;
-
-  const defaultGiaTonMetToi = donGiaMetToiFallback ?? 0;
-  const isManualTon = Boolean(item.thanhTienTonManual);
-  const giaTonMetToi =
-    isManualTon && item.thanhTienTon != null
-      ? thanhTienTonPerPieceToGiaTonMetToi(item.thanhTienTon, metToi)
-      : item.thanhTienTon != null && item.thanhTienTon > 0
-        ? thanhTienTonPerPieceToGiaTonMetToi(item.thanhTienTon, metToi)
-        : defaultGiaTonMetToi;
-
-  const unitPrice = Math.round(giaTonMetToi * metToi + giaNhanCong + phuKien);
-  return { unitPrice, lineTotal: unitPrice * soLuong, giaTonMetToi };
-}
-
 /** Cập nhật index trong Set sau khi Form.List move dòng. */
 function remapIndexSetAfterMove(indices: Set<number>, fromIndex: number, toIndex: number) {
   const next = new Set<number>();
@@ -280,6 +262,27 @@ function remapIndexSetAfterMove(indices: Set<number>, fromIndex: number, toIndex
       return;
     }
     next.add(index);
+  });
+  return next;
+}
+
+/** Dịch chuyển key trong record theo thao tác move dòng Form.List. */
+function remapRecordKeysAfterMove<T>(record: Record<number, T>, fromIndex: number, toIndex: number) {
+  const max = Math.max(
+    ...Object.keys(record).map(Number),
+    fromIndex,
+    toIndex,
+    0,
+  );
+  const arr: (T | undefined)[] = Array.from({ length: max + 1 });
+  Object.entries(record).forEach(([key, value]) => {
+    arr[Number(key)] = value;
+  });
+  const [moved] = arr.splice(fromIndex, 1);
+  arr.splice(toIndex, 0, moved);
+  const next: Record<number, T> = {};
+  arr.forEach((value, index) => {
+    if (value !== undefined) next[index] = value;
   });
   return next;
 }
@@ -325,14 +328,23 @@ export default function OrderFormPage() {
 
   // --- Form Ant Design & theo dõi dòng sản phẩm ---
   const [form] = Form.useForm();
-  const lineInputs = Form.useWatch('lineInputs', form);
 
   // --- Master data & kết quả tính toán ---
   const [nhomList, setNhomList] = useState<NhomSanPham[]>([]);
   const orderableNhomList = useMemo(() => filterOrderableNhoms(nhomList), [nhomList]);
+  const nhomById = useMemo(() => new Map(nhomList.map((n) => [n.id, n])), [nhomList]);
   const [loaiTonList, setLoaiTonList] = useState<LoaiTon[]>([]);
-  const [preview, setPreview] = useState<CalculationResult | null>(null);
+  const loaiTonById = useMemo(() => new Map(loaiTonList.map((t) => [t.id, t])), [loaiTonList]);
+  const [preview] = useState<CalculationResult | null>(null);
   const [linePreviews, setLinePreviews] = useState<Record<number, CalculationResult>>({});
+  const linePreviewsRef = useRef(linePreviews);
+  const previewSignatureRef = useRef<Record<number, string>>({});
+  const previewRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const previewRequestIdRef = useRef(0);
+  const pendingPreviewValuesRef = useRef<{ lineInputs?: LineFormValues[] } | null>(null);
+  const pendingPreviewIndicesRef = useRef<number[] | 'all'>([]);
+  const validationTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [validationLines, setValidationLines] = useState<LineFormValues[]>([]);
 
   // --- UI state ---
   const [loading, setLoading] = useState(false);
@@ -371,16 +383,43 @@ export default function OrderFormPage() {
     form.setFieldValue(['lineInputs', lineIndex, 'thanhTienTonManual'], true);
   };
 
-  const withManualTonFlags = (items: LineFormValues[]) =>
-    items.map((line, index) => ({
-      ...line,
-      thanhTienTonManual: isThanhTienTonManual(line, index),
-    }));
+  const loaiTonOptions = useMemo(
+    () => loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` })),
+    [loaiTonList],
+  );
+
+  const withManualTonFlags = useCallback(
+    (items: LineFormValues[]) =>
+      items.map((line, index) => ({
+        ...line,
+        thanhTienTonManual: isThanhTienTonManual(line, index),
+      })),
+    [],
+  );
+
+  const scheduleValidationUpdate = useCallback((lines: LineFormValues[]) => {
+    if (validationTimerRef.current) clearTimeout(validationTimerRef.current);
+    validationTimerRef.current = setTimeout(() => {
+      setValidationLines(lines);
+    }, 600);
+  }, []);
+
+  useEffect(() => {
+    linePreviewsRef.current = linePreviews;
+  }, [linePreviews]);
+
+  useEffect(
+    () => () => {
+      if (previewRefreshTimerRef.current) clearTimeout(previewRefreshTimerRef.current);
+      if (validationTimerRef.current) clearTimeout(validationTimerRef.current);
+    },
+    [],
+  );
 
   /** Options loại SP cho dropdown: chỉ SP có công thức; giữ lựa chọn cũ khi sửa đơn. */
   const getNhomSelectOptions = (lineIndex: number) => {
     const options = orderableNhomList.map((n) => ({ value: n.id, label: n.tenNhom }));
-    const currentId = Number(lineInputs?.[lineIndex]?.nhomSanPhamId);
+    const currentId = Number(form.getFieldValue(['lineInputs', lineIndex, 'nhomSanPhamId']));
     if (currentId && !orderableNhomList.some((n) => n.id === currentId)) {
       const legacy = nhomList.find((n) => n.id === currentId);
       if (legacy) {
@@ -435,7 +474,8 @@ export default function OrderFormPage() {
           lineInputs,
         });
         if (initialLines.length > 0) {
-          await refreshPreviews({ lineInputs }, nhoms);
+          await refreshPreviews({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
+          setValidationLines(lineInputs as LineFormValues[]);
         }
       } else if (copyFromId) {
         try {
@@ -451,7 +491,8 @@ export default function OrderFormPage() {
             lineInputs,
           });
           if (initialLines.length > 0) {
-            await refreshPreviews({ lineInputs }, nhoms);
+            await refreshPreviews({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
+            setValidationLines(lineInputs as LineFormValues[]);
           }
         } catch {
           message.error('Không tải được đơn hàng để sao chép');
@@ -490,48 +531,114 @@ export default function OrderFormPage() {
     }
   };
 
-  /**
-   * Gọi API preview cho từng dòng hợp lệ và lưu kết quả vào state.
-   * @param allValues Toàn bộ giá trị form hiện tại.
-   * @param customNhomList Danh sách nhóm sản phẩm (dùng khi state chưa cập nhật kịp).
-   */
-  const refreshPreviews = async (allValues: any, customNhomList?: NhomSanPham[]) => {
-    const items: LineFormValues[] = withManualTonFlags(allValues.lineInputs || []);
-    const previews: Record<number, CalculationResult> = {};
-    const currentNhomList = customNhomList || nhomList;
-    isAutoUpdatingThanhTienTonRef.current = true;
-    try {
-      for (let index = 0; index < items.length; index += 1) {
-        const item = items[index];
-        const nhom = currentNhomList.find((n) => n.id === Number(item?.nhomSanPhamId));
-        const canPreview = item && item.nhomSanPhamId && item.loaiTonId && Number(item.soLuong) > 0 && hasAllDimensions(item, nhom);
-        if (canPreview) {
-          try {
-            const res = await previewCalculation({
-              ...item,
-              thueSuat: (item.thueSuat ?? 0) / 100,
-            } as any);
-            previews[index] = res;
+  /** Xóa kích thước & preview của dòng khi đổi loại sản phẩm. */
+  const clearLineDimensions = useCallback((lineIndex: number) => {
+    form.setFieldValue(['lineInputs', lineIndex, 'w'], undefined);
+    form.setFieldValue(['lineInputs', lineIndex, 'h'], undefined);
+    form.setFieldValue(['lineInputs', lineIndex, 'thamSoNhap'], {});
+    delete previewSignatureRef.current[lineIndex];
+    setLinePreviews((prev) => {
+      if (prev[lineIndex] === undefined) return prev;
+      const next = { ...prev };
+      delete next[lineIndex];
+      return next;
+    });
+  }, [form]);
 
-            // Giá tôn = tiền tôn/1 cái; gợi ý = đơn giá/mét tới × ∑Ssx mét tới (không × SL)
-            const ton = loaiTonList.find((t) => t.id === Number(item.loaiTonId));
-            if (!isThanhTienTonManual(item, index) && ton) {
-              form.setFieldValue(
-                ['lineInputs', index, 'thanhTienTon'],
-                suggestThanhTienTon(ton.donGiaMetToi, res.dienTichSanXuatMetToi),
-              );
+  /**
+   * Gọi API preview cho các dòng cần thiết (song song, có cache chữ ký).
+   */
+  const refreshPreviews = useCallback(
+    async (
+      allValues: { lineInputs?: LineFormValues[] },
+      customNhomList?: NhomSanPham[],
+      lineIndicesToRefresh: number[] | 'all' = 'all',
+    ) => {
+      const requestId = ++previewRequestIdRef.current;
+      const items = withManualTonFlags(allValues.lineInputs || []);
+      const currentNhomById = customNhomList
+        ? new Map(customNhomList.map((n) => [n.id, n]))
+        : nhomById;
+      const indices =
+        lineIndicesToRefresh === 'all'
+          ? items.map((_, index) => index)
+          : lineIndicesToRefresh;
+
+      isAutoUpdatingThanhTienTonRef.current = true;
+      const updates: Record<number, CalculationResult> = {};
+      const invalidIndices = new Set<number>();
+
+      try {
+        await Promise.all(
+          indices.map(async (index) => {
+            const item = items[index];
+            if (!item) return;
+
+            const nhom = currentNhomById.get(Number(item.nhomSanPhamId));
+            const canPreview =
+              item.nhomSanPhamId &&
+              item.loaiTonId &&
+              Number(item.soLuong) > 0 &&
+              hasAllDimensions(item, nhom);
+
+            if (!canPreview) {
+              invalidIndices.add(index);
+              delete previewSignatureRef.current[index];
+              return;
             }
-          } catch {
-            // Bỏ qua lỗi preview của dòng này để không làm hỏng toàn bộ form.
-          }
+
+            const signature = buildLinePreviewSignature(item);
+            const cached = linePreviewsRef.current[index];
+            if (cached && previewSignatureRef.current[index] === signature) {
+              updates[index] = cached;
+              return;
+            }
+
+            try {
+              const res = await previewCalculation({
+                ...item,
+                thueSuat: (item.thueSuat ?? 0) / 100,
+              } as Parameters<typeof previewCalculation>[0]);
+              if (requestId !== previewRequestIdRef.current) return;
+
+              previewSignatureRef.current[index] = signature;
+              updates[index] = res;
+
+              const ton = loaiTonById.get(Number(item.loaiTonId));
+              if (!isThanhTienTonManual(item, index) && ton) {
+                form.setFieldValue(
+                  ['lineInputs', index, 'thanhTienTon'],
+                  suggestThanhTienTon(ton.donGiaMetToi, res.dienTichSanXuatMetToi),
+                );
+              }
+            } catch {
+              invalidIndices.add(index);
+            }
+          }),
+        );
+      } finally {
+        if (requestId === previewRequestIdRef.current) {
+          isAutoUpdatingThanhTienTonRef.current = false;
         }
       }
-    } finally {
-      isAutoUpdatingThanhTienTonRef.current = false;
-    }
-    setLinePreviews(previews);
-    return previews;
-  };
+
+      if (requestId !== previewRequestIdRef.current) {
+        return linePreviewsRef.current;
+      }
+
+      setLinePreviews((prev) => {
+        const next = { ...prev, ...updates };
+        invalidIndices.forEach((index) => {
+          delete next[index];
+          delete previewSignatureRef.current[index];
+        });
+        return next;
+      });
+
+      return { ...linePreviewsRef.current, ...updates };
+    },
+    [form, loaiTonById, nhomById, withManualTonFlags],
+  );
 
   /** Mở modal F4 chọn dòng từ đơn hàng cũ cho dòng `lineIndex`. */
   const openLineHistory = (lineIndex: number) => {
@@ -558,6 +665,11 @@ export default function OrderFormPage() {
     });
     thanhTienTonManualLinesRef.current = remapIndexSetAfterMove(
       thanhTienTonManualLinesRef.current,
+      fromIndex,
+      toIndex,
+    );
+    previewSignatureRef.current = remapRecordKeysAfterMove(
+      previewSignatureRef.current,
       fromIndex,
       toIndex,
     );
@@ -659,40 +771,6 @@ export default function OrderFormPage() {
   };
 
   /**
-   * Tính tổng theo các preview đã có và thuế suất hiện tại.
-   * Thuế VAT được nhóm theo từng mức % (mỗi loại một dòng).
-   */
-  const calculateTotals = () => {
-    let totalThanhTien = 0;
-    const items = withManualTonFlags(form.getFieldValue('lineInputs') || []);
-    const thueByRate = new Map<number, number>();
-
-    items.forEach((item: LineFormValues, index: number) => {
-      const preview = linePreviews[index];
-      if (preview) {
-        const ton = loaiTonList.find((t) => t.id === Number(item.loaiTonId));
-        const { lineTotal } = calcLinePricing(preview, item, ton?.donGiaMetToi);
-        totalThanhTien += lineTotal;
-        const rate = Number(item?.thueSuat ?? 0);
-        const lineThue = lineTotal * (rate / 100);
-        thueByRate.set(rate, (thueByRate.get(rate) ?? 0) + lineThue);
-      }
-    });
-
-    const thueTheoLoai = [...thueByRate.entries()]
-      .map(([thueSuat, tienThue]) => ({ thueSuat, tienThue }))
-      .sort((a, b) => a.thueSuat - b.thueSuat);
-    const totalThue = thueTheoLoai.reduce((sum, g) => sum + g.tienThue, 0);
-
-    return {
-      tongTien: totalThanhTien,
-      thueTien: totalThue,
-      thueTheoLoai,
-      tongTienSauThue: totalThanhTien + totalThue,
-    };
-  };
-
-  /**
    * Kiểm tra dòng chưa đủ thông tin để highlight đỏ trên bảng.
    * Bỏ qua dòng đệm cuối và dòng hoàn toàn trống.
    */
@@ -731,27 +809,60 @@ export default function OrderFormPage() {
   };
 
   /**
-   * Khi form thay đổi: cập nhật preview, nhóm đang chọn và tự thêm dòng nếu cần.
-   * @param _ Giá trị thay đổi, không dùng trực tiếp.
-   * @param allValues Toàn bộ giá trị form hiện tại.
+   * Khi form thay đổi: debounce preview API; bỏ qua API khi chỉ đổi giá/thuế/tên...
    */
-  const onValuesChange = async (changedValues: any, allValues: any) => {
-    try {
-      markManualTonFromChange(changedValues);
-      const lineInputs = withManualTonFlags(allValues.lineInputs || []);
-      await refreshPreviews({ ...allValues, lineInputs });
-      const items = allValues.lineInputs || [];
-      const rowWithNhom = [...items].reverse().find((item) => item?.nhomSanPhamId);
+  const onValuesChange = (changedValues: any, allValues: any) => {
+    markManualTonFromChange(changedValues);
+
+    const items = allValues.lineInputs || [];
+    const indices = getLineIndicesNeedingPreviewRefresh(changedValues);
+
+    // Chỉ cập nhật highlight lỗi khi đổi trường không gọi preview (tránh giật khi gõ W/H/SL).
+    if (Array.isArray(indices) && indices.length === 0) {
+      scheduleValidationUpdate(items);
+    }
+
+    if (nhomSelectionChanged(changedValues)) {
+      const rowWithNhom = [...items].reverse().find((item: LineFormValues) => item?.nhomSanPhamId);
       if (rowWithNhom?.nhomSanPhamId) {
-        const found = nhomList.find((n) => n.id === Number(rowWithNhom.nhomSanPhamId));
-        setSelectedNhomRow(found);
+        setSelectedNhomRow(nhomById.get(Number(rowWithNhom.nhomSanPhamId)));
       } else {
         setSelectedNhomRow(undefined);
       }
-      ensureNewRowIfNeeded(allValues);
-    } catch {
-      setPreview(null);
     }
+
+    if (Array.isArray(indices) && indices.length === 0) {
+      ensureNewRowIfNeeded(allValues);
+      return;
+    }
+
+    pendingPreviewValuesRef.current = {
+      ...allValues,
+      lineInputs: withManualTonFlags(items),
+    };
+
+    if (indices === 'all') {
+      pendingPreviewIndicesRef.current = 'all';
+    } else if (pendingPreviewIndicesRef.current !== 'all') {
+      const merged = new Set([...pendingPreviewIndicesRef.current, ...indices]);
+      pendingPreviewIndicesRef.current = [...merged];
+    }
+
+    if (previewRefreshTimerRef.current) {
+      clearTimeout(previewRefreshTimerRef.current);
+    }
+
+    previewRefreshTimerRef.current = setTimeout(() => {
+      const payload = pendingPreviewValuesRef.current;
+      const refreshIndices = pendingPreviewIndicesRef.current;
+      pendingPreviewValuesRef.current = null;
+      pendingPreviewIndicesRef.current = [];
+      if (!payload) return;
+      void refreshPreviews(payload, undefined, refreshIndices).then(() => {
+        ensureNewRowIfNeeded(payload);
+        scheduleValidationUpdate(payload.lineInputs || []);
+      });
+    }, PREVIEW_DEBOUNCE_MS);
   };
 
   /**
@@ -929,7 +1040,11 @@ export default function OrderFormPage() {
                       <div className="price-field-row">
                         <FieldLabel>Loại sản phẩm</FieldLabel>
                         <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}>
-                          <HintSelect placeholder="Chọn loại" options={getNhomSelectOptions(field.name)} />
+                          <HintSelect
+                            placeholder="Chọn loại"
+                            options={getNhomSelectOptions(field.name)}
+                            onChange={() => clearLineDimensions(field.name)}
+                          />
                         </Form.Item>
                       </div>
                       <div className="price-field-row">
@@ -966,41 +1081,14 @@ export default function OrderFormPage() {
                   align: 'center' as const,
                   onCell: () => ({ className: 'dimension-column-cell' }),
                   onHeaderCell: () => ({ className: 'dimension-column-cell' }),
-                  render: (_: any, field: any) => {
-                    const nhomId = form.getFieldValue(['lineInputs', field.name, 'nhomSanPhamId']);
-                    const nhom = nhomList.find((n) => n.id === nhomId);
-                    const dimensionFields = getDimensionFields(nhom);
-
-                    return (
-                      <div className="dimension-fields-grid">
-                        {dimensionFields.map((dimension) => {
-                          const name = dimension.target === 'thamSoNhap'
-                            ? [field.name, 'thamSoNhap', dimension.paramKey ?? dimension.key]
-                            : [field.name, dimension.target];
-
-                          return (
-                            <Form.Item
-                              key={dimension.key}
-                              name={name}
-                              noStyle
-                              rules={[{ required: true, message: `Nhập ${dimension.label}` }]}
-                            >
-                              <HintInputNumber
-                                className="dimension-field-input"
-                                min={dimension.key === 'phan_manh' ? 1 : 0}
-                                step={dimension.key === 'phan_manh' ? 1 : 10}
-                                placeholder={dimension.label}
-                                tooltip={dimension.label}
-                                addonBefore={dimension.label}
-                                controls={false}
-                                style={{ width: '100%' }}
-                              />
-                            </Form.Item>
-                          );
-                        })}
-                      </div>
-                    );
-                  },
+                  render: (_: any, field: any) => (
+                    <DimensionFieldsCell
+                      fieldName={field.name}
+                      form={form}
+                      nhomById={nhomById}
+                      getDimensionFields={getDimensionFields}
+                    />
+                  ),
                 },
                 // Cột loại tôn + khối lượng (preview)
                 {
@@ -1024,7 +1112,7 @@ export default function OrderFormPage() {
                               className="ton-field-select"
                               placeholder="Chọn tôn"
                               tooltip="Loại tôn"
-                              options={loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` }))}
+                              options={loaiTonOptions}
                             />
                           </Form.Item>
                         </div>
@@ -1154,74 +1242,29 @@ export default function OrderFormPage() {
                   align: 'left' as const,
                   onHeaderCell: () => ({ className: 'order-value-column' }),
                   onCell: () => ({ className: 'order-value-column' }),
-                  render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    if (!preview) return '-';
-                    const lines = withManualTonFlags(form.getFieldValue('lineInputs') || []);
-                    const item = lines[field.name];
-                    const ton = loaiTonList.find((t) => t.id === Number(item?.loaiTonId));
-                    const { unitPrice, lineTotal } = calcLinePricing(preview, item ?? {}, ton?.donGiaMetToi);
-                    const unitPriceText = formatMoney(unitPrice);
-                    const lineTotalText = formatMoney(lineTotal);
-                    return (
-                      <div className="price-fields-stack area-fields-stack value-fields-stack">
-                        <div className="price-field-row">
-                          <FieldLabel>Đơn giá(VND)</FieldLabel>
-                          <span className="display-value value-display-value" title={`Đơn giá: ${unitPriceText} đ`}>
-                            {unitPriceText}
-                          </span>
-                        </div>
-                        <div className="price-field-row">
-                          <FieldLabel>Thành tiền(VND)</FieldLabel>
-                          <span className="display-value value-display-value" title={`Thành tiền: ${lineTotalText} đ`}>
-                            {lineTotalText}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  },
+                  render: (_: any, field: any) => (
+                    <LineValueCell
+                      lineIndex={field.name}
+                      form={form}
+                      linePreviews={linePreviews}
+                      loaiTonById={loaiTonById}
+                      withManualTonFlags={withManualTonFlags}
+                    />
+                  ),
                 },
                 // Cột ghi chú + ảnh minh họa master loại SP
                 {
                   title: 'Ghi chú & hình ảnh',
                   dataIndex: 'ghiChuHinhAnh',
                   width: 180,
-                  render: (_: any, field: any) => {
-                    const nhomId = lineInputs?.[field.name]?.nhomSanPhamId
-                      ?? form.getFieldValue(['lineInputs', field.name, 'nhomSanPhamId']);
-                    const nhom = nhomList.find((n) => n.id === Number(nhomId));
-                    const imageUrl = resolveMasterImageUrl(nhom?.hinhAnhMinhHoa);
-
-                    return (
-                      <div className="price-fields-stack">
-                        <div className="price-field-row">
-                          <FieldLabel>Ghi chú</FieldLabel>
-                          <Form.Item
-                            name={[field.name, 'ghiChu']}
-                            noStyle
-                            rules={
-                              requiredRulesFor('Ghi chú')
-                              ?? (requiredRulesFor('Ghi chú/ hình ảnh') ? [{ required: true, message: 'Nhập ghi chú' }] : undefined)
-                            }
-                          >
-                            <HintInput placeholder="Nhập ghi chú" />
-                          </Form.Item>
-                        </div>
-                        <div className="price-field-row">
-                          <FieldLabel>Hình ảnh</FieldLabel>
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={nhom?.tenNhom ?? 'Minh họa sản phẩm'}
-                              className="product-master-image"
-                            />
-                          ) : (
-                            <span className="display-value">-</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  },
+                  render: (_: any, field: any) => (
+                    <LineGhiChuImageCell
+                      fieldName={field.name}
+                      form={form}
+                      nhomById={nhomById}
+                      requiredRulesFor={requiredRulesFor}
+                    />
+                  ),
                 },
                 // Cột di chuyển / xóa dòng
                 {
@@ -1247,6 +1290,7 @@ export default function OrderFormPage() {
                           size="small"
                           icon={<ArrowUpOutlined />}
                           title="Di chuyển lên"
+                          tabIndex={-1}
                           disabled={!canMoveUp}
                           onClick={() => void handleMoveLine(index, 'up', move)}
                         />
@@ -1255,6 +1299,7 @@ export default function OrderFormPage() {
                           size="small"
                           icon={<ArrowDownOutlined />}
                           title="Di chuyển xuống"
+                          tabIndex={-1}
                           disabled={!canMoveDown}
                           onClick={() => void handleMoveLine(index, 'down', move)}
                         />
@@ -1299,6 +1344,7 @@ export default function OrderFormPage() {
                             size="small"
                             icon={<SwapOutlined />}
                             title="Di chuyển đến dòng (nhập STT)"
+                            tabIndex={-1}
                             disabled={isBuffer || movableCount <= 1}
                           />
                         </Popover>
@@ -1321,6 +1367,7 @@ export default function OrderFormPage() {
                             danger
                             icon={<MinusCircleOutlined />}
                             title="Xóa dòng"
+                            tabIndex={-1}
                             disabled={fields.length === 1}
                           />
                         </Popconfirm>
@@ -1329,10 +1376,6 @@ export default function OrderFormPage() {
                   },
                 },
               ];
-
-              // Tổng tiền footer bảng + highlight dòng lỗi
-              const totals = calculateTotals();
-              const items = form.getFieldValue('lineInputs') || [];
 
               return (
                 <>
@@ -1347,47 +1390,15 @@ export default function OrderFormPage() {
                     scroll={{ x: ORDER_PRODUCT_TABLE_SCROLL_X }}
                     locale={{ emptyText: 'Chưa có dòng sản phẩm' }}
                     rowClassName={(_, __, index) => {
-                      const item = items[index];
-                      return isRowIncomplete(item, index, items.length) ? 'error-row' : '';
+                      const item = validationLines[index];
+                      return item && isRowIncomplete(item, index, validationLines.length) ? 'error-row' : '';
                     }}
-                    footer={() => (
-                      <div style={{ padding: '12px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', justifyItems: 'end' }}>
-                          <div />
-                          <div style={{ minWidth: '450px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center' }}>
-                                <span style={{ fontWeight: 'bold' }}>Tổng trước thuế:</span>
-                                <span style={{ fontWeight: 'bold', color: '#1677ff', textAlign: 'right' }}>{formatMoney(totals.tongTien)} đ</span>
-                              </div>
-                              {totals.thueTheoLoai
-                                .filter((group) => group.tienThue > 0)
-                                .map((group) => (
-                                  <div
-                                    key={group.thueSuat}
-                                    style={{
-                                      display: 'grid',
-                                      gridTemplateColumns: '200px auto',
-                                      gap: '16px',
-                                      alignItems: 'center',
-                                      color: '#666',
-                                    }}
-                                  >
-                                    <span>Thuế VAT {group.thueSuat}%:</span>
-                                    <span style={{ textAlign: 'right' }}>{formatMoney(Math.round(group.tienThue))} đ</span>
-                                  </div>
-                                ))}
-                              {totals.thueTien > 0 && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '200px auto', gap: '16px', alignItems: 'center', paddingTop: '8px', borderTop: '2px solid #ff7a45', fontWeight: 'bold', color: '#ff7a45', fontSize: '16px' }}>
-                                  <span>Tổng sau thuế:</span>
-                                  <span style={{ textAlign: 'right' }}>{formatMoney(Math.round(totals.tongTienSauThue))} đ</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  />
+                  <OrderTotalsFooter
+                    form={form}
+                    linePreviews={linePreviews}
+                    loaiTonById={loaiTonById}
+                    withManualTonFlags={withManualTonFlags}
                   />
                   <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(orderableNhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
                     Thêm dòng mới
@@ -1548,12 +1559,6 @@ export default function OrderFormPage() {
                     .dimension-field-input .ant-input-number-input {
                       min-width: 3.5ch;
                       padding-inline: 0;
-                    }
-                    .error-row {
-                      background-color: #fff2f0 !important;
-                    }
-                    .error-row:hover {
-                      background-color: #ffe7e0 !important;
                     }
                     .error-row td {
                       padding-inline: 1px !important;

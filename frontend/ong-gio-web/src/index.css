@@ -145,6 +145,27 @@ body {
   vertical-align: middle;
 }
 
+/* Bảng cụm sản phẩm — xen kẽ dòng xám nhạt + hover dễ theo dõi */
+.order-product-table .ant-table-tbody > tr:nth-child(odd) > td {
+  background: #fff;
+}
+
+.order-product-table .ant-table-tbody > tr:nth-child(even) > td {
+  background: #fafafa;
+}
+
+.order-product-table .ant-table-tbody > tr:hover > td {
+  background: rgba(0, 194, 255, 0.12) !important;
+}
+
+.order-product-table .ant-table-tbody > tr.error-row > td {
+  background: #f5f5f5 !important;
+}
+
+.order-product-table .ant-table-tbody > tr.error-row:hover > td {
+  background: rgba(0, 194, 255, 0.12) !important;
+}
+
 .order-product-table .order-ton-column,
 .order-product-table .order-area-column {
   overflow: hidden;

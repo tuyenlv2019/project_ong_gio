@@ -1,6 +1,75 @@
 .brand-sider {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 200;
   background: var(--brand-table-header-bg) !important;
   box-shadow: 2px 0 12px rgba(0, 61, 130, 0.25);
+}
+
+.app-layout-root {
+  min-height: 100vh;
+}
+
+.layout-with-sider {
+  margin-left: 240px;
+  min-height: 100vh;
+  transition: margin-left 0.2s;
+}
+
+.layout-with-sider.is-collapsed {
+  margin-left: 80px;
+}
+
+.layout-content {
+  margin: 24px;
+}
+
+.brand-sider.ant-layout-sider-collapsed .brand-logo-wrap {
+  margin: 8px;
+  padding: 8px;
+}
+
+.brand-sider.ant-layout-sider-collapsed .brand-logo {
+  max-height: 36px;
+}
+
+.brand-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand-sider-toggle {
+  flex-shrink: 0;
+  color: var(--brand-blue) !important;
+  font-size: 18px;
+}
+
+.brand-sider-toggle:hover {
+  color: var(--brand-accent) !important;
+  background: rgba(0, 194, 255, 0.1) !important;
+}
+
+@media (max-width: 991px) {
+  .layout-with-sider,
+  .layout-with-sider.is-collapsed {
+    margin-left: 0;
+  }
+
+  .brand-sider.ant-layout-sider {
+    transform: translateX(-100%);
+  }
+
+  .brand-sider.ant-layout-sider:not(.ant-layout-sider-collapsed) {
+    transform: translateX(0);
+  }
 }
 
 .brand-logo-wrap {
@@ -54,6 +123,9 @@
 }
 
 .brand-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   background: #fff !important;
   padding: 0 24px !important;
   border-bottom: 2px solid var(--brand-accent) !important;

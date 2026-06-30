@@ -9,7 +9,7 @@ namespace OngGio.Infrastructure.Services;
 internal static class BaoGiaExcelExporter
 {
     private const string TemplateFileName = "BaoGiaExportTemplate.xlsx";
-    private const string WorksheetName = "Sheet 2";
+    private const string WorksheetName = "Báo giá";
     private const int DataStartRow = 5;
     private const int StyleSourceRow = 5;
     private const int FooterStartRow = 6;
