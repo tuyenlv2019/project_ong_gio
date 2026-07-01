@@ -8,7 +8,4 @@ internal static class AuthClaims
 
     public static bool IsAdmin(ClaimsPrincipal user) =>
         string.Equals(user.FindFirst("vaiTro")?.Value, AdminRole, StringComparison.OrdinalIgnoreCase);
-
-    public static int? GetUserId(ClaimsPrincipal user) =>
-        int.TryParse(user.FindFirst("id")?.Value, out var userId) ? userId : null;
 }

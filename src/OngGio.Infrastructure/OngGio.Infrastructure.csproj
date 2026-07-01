@@ -24,4 +24,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OngGio.Infrastructure.Tests" />
+  </ItemGroup>
+
 </Project>

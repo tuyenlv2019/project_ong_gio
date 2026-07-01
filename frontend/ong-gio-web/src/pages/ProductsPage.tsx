@@ -34,9 +34,12 @@ export default function ProductsPage() {
   const [form] = Form.useForm();
   const [formulaCopyKey, setFormulaCopyKey] = useState(0);
 
-  const load = async () => setData(await getNhomSanPhams());
+  const reload = () => {
+    void getNhomSanPhams().then(setData);
+  };
+
   useEffect(() => {
-    load();
+    reload();
   }, []);
 
   const filteredData = useMemo(
@@ -109,7 +112,7 @@ export default function ProductsPage() {
         message.success('Đã thêm sản phẩm');
       }
       setOpen(false);
-      load();
+      reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       message.error(msg || 'Lưu thất bại');
@@ -177,7 +180,7 @@ export default function ProductsPage() {
                   onConfirm={async () => {
                     await deleteNhomSanPham(row.id);
                     message.success('Đã xóa');
-                    load();
+                    reload();
                   }}
                 >
                   <Button size="small" danger icon={<DeleteOutlined />} />

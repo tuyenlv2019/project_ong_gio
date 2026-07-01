@@ -1,7 +1,5 @@
 using OngGio.Application.Calculation;
 
-using OngGio.Application.Calculation.Formulas;
-
 using OngGio.Domain.Entities;
 
 
@@ -14,33 +12,7 @@ public class CalculationEngineTests
 
 {
 
-    private readonly CalculationEngine _engine = new([
-
-        new Co90AreaFormula(),
-
-        new Co45AreaFormula(),
-
-        new OngThangAreaFormula(),
-
-        new OngBitMotDauAreaFormula(),
-
-        new OngBitHaiDauAreaFormula(),
-
-        new GiamAreaFormula(),
-
-        new ChanReAreaFormula(),
-
-        new BzAreaFormula(),
-
-        new TeCutAreaFormula(),
-
-        new TeReAreaFormula(),
-
-        new HopPlenumAreaFormula(),
-
-        new ChacAreaFormula()
-
-    ]);
+    private readonly CalculationEngine _engine = new();
 
 
 

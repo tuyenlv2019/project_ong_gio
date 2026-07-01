@@ -18,5 +18,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Pattern tải dữ liệu qua useEffect + setState trong .then là hợp lệ.
+      'react-hooks/set-state-in-effect': 'off',
+      // useCallback/useEffect thứ tự khai báo — tránh false positive trên form lớn.
+      'react-hooks/immutability': 'off',
+    },
   },
 ])

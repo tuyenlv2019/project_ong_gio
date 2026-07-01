@@ -109,7 +109,8 @@ public static class DependencyInjection
             {
                 nhom.TenNhom = tenNhom;
                 nhom.HinhAnhMinhHoa = hinhAnh;
-                nhom.CongThucDienTich = congThuc;
+                if (string.IsNullOrWhiteSpace(nhom.CongThucDienTich))
+                    nhom.CongThucDienTich = congThuc;
             }
 
             var desiredParams = thamSoForm.ToHashSet(StringComparer.OrdinalIgnoreCase);

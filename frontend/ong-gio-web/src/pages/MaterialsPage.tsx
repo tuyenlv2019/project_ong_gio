@@ -36,9 +36,12 @@ export default function MaterialsPage() {
   const [editing, setEditing] = useState<LoaiTon | null>(null);
   const [form] = Form.useForm();
 
-  const load = async () => setData(await getLoaiTons());
+  const reload = () => {
+    void getLoaiTons().then(setData);
+  };
+
   useEffect(() => {
-    load();
+    reload();
   }, []);
 
   const filteredData = useMemo(
@@ -64,7 +67,7 @@ export default function MaterialsPage() {
       message.success('Đã thêm loại tôn');
     }
     setOpen(false);
-    load();
+    reload();
   };
 
   return (
@@ -112,7 +115,7 @@ export default function MaterialsPage() {
                   onConfirm={async () => {
                     await deleteLoaiTon(row.id);
                     message.success('Đã xóa');
-                    load();
+                    reload();
                   }}
                 >
                   <Button size="small" danger icon={<DeleteOutlined />} />

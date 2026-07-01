@@ -1,143 +1,267 @@
-# Backend Summary
+# Backend — Ong Gio
 
-This folder contains the ASP.NET Core backend for the Ong Gio system.
+ASP.NET Core 8: API REST, tính giá theo công thức DB (NCalc), PostgreSQL, JWT.  
+Frontend React nằm tại `frontend/ong-gio-web/`; test nằm tại `tests/`.
 
-## Solution Structure
+> Ký hiệu trong cây: `#` hoặc `—` phía sau tên file là mô tả chức năng.
 
-- `OngGio.Api`
-  - HTTP API layer
-  - Authentication setup
-  - Swagger
-  - CORS
-  - Startup seeding
-- `OngGio.Application`
-  - Calculation engine
-  - Formula implementations
-  - Service abstractions
-- `OngGio.Domain`
-  - Entities and shared domain types
-- `OngGio.Infrastructure`
-  - EF Core database context
-  - PostgreSQL integration
-  - Authentication and captcha services
-  - Business services
-  - Seed data
+---
 
-## Backend Responsibilities
+## Cấu trúc `src/` (cây nhị phân)
 
-### Authentication
+```
+src/
+├── OngGio.slnx                          # Solution Visual Studio — gom 4 project backend
+├── README.md                            # Tài liệu cấu trúc & luồng xử lý (file này)
+│
+├── OngGio.Api/                          # Tầng HTTP: controller, cấu hình, static file
+│   ├── Program.cs                       # Entry point: DI Application+Infrastructure, JWT,
+│   │                                    #   policy AdminOnly, CORS, Swagger (dev), static files,
+│   │                                    #   seed DB lúc startup, SPA fallback (production)
+│   ├── AuthClaims.cs                    # Helper đọc claim `vaiTro`, kiểm tra ADMIN cho policy
+│   ├── OngGio.Api.csproj                # Project web host, reference Application+Infrastructure
+│   ├── OngGio.Api.http                  # File gọi thử API trong IDE (REST Client)
+│   ├── appsettings.json                 # Connection string PostgreSQL, JwtSettings, logging
+│   ├── appsettings.Development.json     # Override cấu hình môi trường dev
+│   ├── Controllers/
+│   │   ├── AuthController.cs            # GET captcha (ảnh base64 + captchaId);
+│   │   │                                #   POST login (user/pass/captcha) → JWT + thông tin user
+│   │   ├── BaoGiaController.cs          # CRUD báo giá `/api/bao-gia`;
+│   │   │                                #   GET line-history (F4 chọn dòng cũ);
+│   │   │                                #   PATCH trạng thái; GET export-excel (file .xlsx)
+│   │   ├── CalculationController.cs     # POST `/api/calculation/preview` — tính thử 1 dòng
+│   │   │                                #   (diện tích, khối lượng, đơn giá) không lưu DB
+│   │   ├── DashboardController.cs       # GET `/api/dashboard` — thống kê tổng quan
+│   │   │                                #   (số đơn, doanh thu, SP, loại tôn, user…)
+│   │   ├── HealthController.cs          # GET healthcheck đơn giản — kiểm tra API còn sống
+│   │   ├── LoaiTonController.cs         # CRUD loại tôn: thương hiệu, độ dày,
+│   │   │                                #   đơn giá/mét tới, kg/mét tới
+│   │   └── NhomSanPhamController.cs     # CRUD nhóm sản phẩm + tham số cố định;
+│   │                                    #   upload ảnh minh họa; lưu CongThucDienTich
+│   ├── Properties/
+│   │   └── launchSettings.json          # Profile chạy local (URL, port, biến môi trường)
+│   └── wwwroot/
+│       └── images/                      # Ảnh tĩnh phục vụ API + SPA production
+│           ├── *.png                    # Ảnh minh họa master SP (co90, ong-thang, giam…)
+│           └── uploads/                 # Ảnh user upload từ màn Sản phẩm (tên file GUID)
+│
+├── OngGio.Application/                  # Logic thuần: engine tính toán, interface — không EF
+│   ├── DependencyInjection.cs           # Đăng ký scoped `ICalculationEngine` → `CalculationEngine`
+│   ├── OngGio.Application.csproj
+│   ├── Abstractions/
+│   │   ├── IAuthService.cs              # Hợp đồng đăng nhập: validate user, trả JWT payload
+│   │   ├── ICaptchaService.cs           # Hợp đồng tạo/xác thực captcha một lần (cache)
+│   │   └── ICurrentUserService.cs       # Hợp đồng lấy username hiện tại cho audit field
+│   ├── Calculation/
+│   │   ├── CalculationEngine.cs         # Engine chính: đọc `CongThucDienTich` từ nhóm SP,
+│   │   │                                #   gọi DbFormulaEvaluator → ∑Ssx (m²);
+│   │   │                                #   quy đổi mét tới (÷1.2), tính kg, tiền tôn,
+│   │   │                                #   đơn giá = giá tôn/mét tới × mét tới + NC + PK,
+│   │   │                                #   thành tiền = đơn giá × SL
+│   │   ├── CalculationModels.cs         # `CalculationRequest` (input 1 dòng) và
+│   │   │                                #   `CalculationResult` (output engine)
+│   │   ├── DbFormulaEvaluator.cs        # Parse & eval chuỗi công thức NCalc nhiều dòng;
+│   │   │                                #   hỗ trợ gán biến (W, H, L, r…), kết quả biến `Ssx`
+│   │   └── StandardProductFormulas.cs   # Chuỗi công thức mẫu theo từng loại SP
+│   │                                    #   (dùng seed DB + unit test so khớp SRS)
+│   └── Services/
+│       ├── DashboardStats.cs            # Record DTO thống kê dashboard trả về API
+│       └── IBaoGiaService.cs            # Hợp đồng báo giá: preview, CRUD, export Excel,
+│                                        #   đổi trạng thái, tìm lịch sử dòng;
+│                                        #   kèm DTO `CreateBaoGiaRequest`, `BaoGiaLineHistoryDto`
+│
+├── OngGio.Domain/                       # Entity & kiểu dùng chung — không logic nghiệp vụ
+│   ├── OngGio.Domain.csproj
+│   ├── Common/
+│   │   └── AuditableEntity.cs           # Base class: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
+│   └── Entities/
+│       ├── BaoGia.cs                    # Header báo giá: MaBaoGia, TenKhachHang, NgayTao,
+│       │                                #   ThueSuat (header), tổng tiền, TrangThai, chi tiết con
+│       ├── ChiTietBaoGia.cs             # 1 dòng SP trong đơn: kích thước W/H, thamSoNhap JSON,
+│       │                                #   kết quả tính (diện tích, kg, đơn giá, thành tiền),
+│       │                                #   FK nhóm SP & loại tôn
+│       ├── LoaiTon.cs                   # Master loại tôn: ThuongHieu, DoDay, DonGiaMetToi,
+│       │                                #   KgMoiMetToi
+│       ├── NguoiDung.cs                 # User nội bộ: TenDangNhap, HoTen, hash mật khẩu, VaiTro
+│       ├── NhomSanPham.cs               # Loại/nhóm SP: TenNhom, HinhAnhMinhHoa,
+│       │                                #   CongThucDienTich (công thức ∑Ssx), ThamSoCoDinhs
+│       └── ThamSoCoDinh.cs              # Tham số form theo nhóm SP: TenThamSo, GiaTriSo, ThuTu
+│
+└── OngGio.Infrastructure/               # Triển khai: EF Core, service, seed, export Excel
+    ├── DependencyInjection.cs           # Đăng ký DbContext, Auth, Captcha, BaoGia, Dashboard;
+    │                                    #   `SeedDataAsync`: migrate, seed nhóm SP+công thức,
+    │                                    #   loại tôn, admin; không ghi đè công thức đã có
+    ├── OrderStatusNormalizer.cs         # Chuẩn hóa mã trạng thái đơn → CHUA_XU_LY |
+    │                                    #   DANG_XU_LY | HOAN_THANH (mã lạ → CHUA_XU_LY)
+    ├── PostgresConnectionStringNormalizer.cs  # Chuẩn hóa connection string PostgreSQL
+    ├── OngGio.Infrastructure.csproj
+    ├── Migrations/                      # Lịch sử schema EF Core (PostgreSQL)
+    │   ├── 20260614132405_InitialCreate.cs           # Bảng gốc: báo giá, chi tiết, SP, tôn
+    │   ├── 20260614134946_AddManagementFeatures.cs   # Quản lý user, audit, trạng thái đơn
+    │   ├── 20260615143000_AddLineInputParameters.cs  # Cột thamSoNhapJson trên chi tiết
+    │   ├── 20260615150000_AddLineProductName.cs      # tenSanPham trên chi tiết
+    │   ├── 20260615163000_AddLineUnitAndTax.cs       # donViTinh, thueSuat theo dòng
+    │   ├── 20260616100000_AddMaterialKgPerRunningMeter.cs  # KgMoiMetToi trên loại tôn
+    │   ├── 20260616110000_RemoveLoaiTonBangBaremJson.cs    # Xóa barem JSON loại tôn
+    │   ├── 20260618120000_AddCongThucDienTichToNhomSanPham.cs  # Cột công thức trên nhóm SP
+    │   ├── 20260618140000_AddThuTuToThamSoCoDinh.cs  # Thứ tự hiển thị tham số form
+    │   ├── 20260618150000_AddGhiChuToChiTietBaoGia.cs  # Ghi chú từng dòng đơn
+    │   ├── 20260618160000_AddUniqueIndexToMaBaoGia.cs  # Unique index MaBaoGia
+    │   ├── 20260618170000_RenameDonGiaM2ToDonGiaMetToi.cs  # Đổi đơn giá m² → mét tới
+    │   └── OngGioDbContextModelSnapshot.cs           # Snapshot schema hiện tại cho migration mới
+    ├── Persistence/
+    │   └── OngGioDbContext.cs           # DbContext EF: map entity, quan hệ FK, audit tự động
+    │                                    #   trong SaveChangesAsync
+    ├── Security/
+    │   └── PasswordHasher.cs            # Hash/verify mật khẩu (SHA-256)
+    ├── Seed/
+    │   └── SampleBaoGiaSeeder.cs        # Tạo 1 đơn mẫu demo sau seed (nếu chưa có)
+    ├── Services/
+    │   ├── AuthService.cs               # Xác thực login, kiểm tra active, sinh JWT
+    │   ├── BaoGiaService.cs             # Nghiệp vụ báo giá: preview, tạo/sửa/xóa đơn,
+    │   │                                #   validate kích thước theo tham số DB, gọi engine,
+    │   │                                #   tổng hợp tiền + thuế theo dòng, sinh MaBaoGia,
+    │   │                                #   tìm line-history, gọi export Excel
+    │   ├── BaoGiaExcelExporter.cs       # Xuất .xlsx từ template Sheet 2 → đổi tên sheet
+    │   │                                #   "Báo giá"; ghi dòng SP, tổng cộng, footer mẫu
+    │   ├── CaptchaService.cs            # Sinh captcha PNG base64, cache đáp án, validate 1 lần
+    │   ├── CurrentUserService.cs        # Đọc claim JWT → username audit (fallback `system`)
+    │   └── DashboardService.cs          # Aggregate COUNT/SUM từ DB cho dashboard
+    └── Templates/
+        └── BaoGiaExportTemplate.xlsx    # File mẫu Excel (sheet nguồn `Sheet 2`, header dòng 1–4)
+```
 
-- Provides captcha generation and validation
-- Validates username and password
-- Issues JWT tokens for authenticated users
+### `NguoiDungController` (cùng file `DashboardController.cs`)
 
-### Dashboard
+```
+DashboardController.cs (tiếp)
+└── NguoiDungController              # Route `/api/nguoi-dung`, [Authorize AdminOnly]
+    ├── GET/POST/PUT/DELETE user   # CRUD người dùng nội bộ
+    └── POST reset-password        # Admin reset mật khẩu user
+```
 
-- Aggregates counts and revenue-related statistics
-- Supplies summary data for the admin dashboard
+---
 
-### Quotation and Order Management
+## Cấu trúc `tests/` (cây nhị phân)
 
-- Creates, updates, deletes, and lists quotations
-- Updates quotation status
-- Exports quotation details to Excel
+```
+tests/
+├── OngGio.Application.Tests/
+│   ├── OngGio.Application.Tests.csproj    # xUnit, reference OngGio.Application
+│   ├── CalculationEngineTests.cs          # Test engine end-to-end: công thức DB theo tên SP,
+│   │                                    #   đơn giá không phụ thuộc SL, quy đổi mét tới,
+│   │                                    #   lỗi khi thiếu công thức
+│   └── DbFormulaEvaluatorTests.cs       # Test từng công thức StandardProductFormulas
+│                                        #   so khớp giá trị SRS (Co90, Giam, TeRe…)
+└── OngGio.Infrastructure.Tests/
+    ├── OngGio.Infrastructure.Tests.csproj   # xUnit, InternalsVisibleTo → exporter
+    └── BaoGiaExcelExporterTests.cs        # Test xuất Excel: có bytes, đúng tên sheet,
+                                             #   ghi dòng dữ liệu, đơn rỗng vẫn hợp lệ
+```
 
-### Calculation Engine
+---
 
-- Computes area, weight, pricing, and final totals
-- Uses formula-based handlers for different product shapes
+## Cấu trúc `frontend/ong-gio-web/src/` (cây nhị phân)
 
-### Master Data Management
+```
+frontend/ong-gio-web/src/
+├── main.tsx                             # Mount React, import `index.css`, render `<App />`
+├── App.tsx                              # React Router: /login, layout bảo vệ, các route trang
+├── App.css                              # CSS template Vite (hiện không import — legacy)
+├── index.css                            # Global style: bảng đơn hàng, sidebar, màu dòng…
+├── api.ts                               # Axios client + JWT interceptor; hàm gọi API:
+│                                        #   dashboard, master data, báo giá, preview, user;
+│                                        #   formatMoney, TRANG_THAI_DON
+├── authService.ts                       # Login/logout, lưu token+user localStorage,
+│                                        #   isAdmin, đổi mật khẩu
+├── types.ts                             # TypeScript interfaces + `API_BASE` URL
+├── assets/                              # Ảnh/svg template Vite (hero, logo)
+├── components/
+│   ├── order/
+│   │   └── OrderLineCells.tsx           # Cell tách re-render form đơn: dropdown loại SP,
+│   │                                    #   ô kích thước, preview tôn/diện tích/giá, footer tổng
+│   ├── AdminRoute.tsx                   # Chặn route chỉ ADMIN
+│   ├── ChangePasswordModal.tsx          # Modal đổi mật khẩu user đang login
+│   ├── EllipsisText.tsx                 # Text rút gọn + tooltip khi tràn
+│   ├── FormulaDisplay.tsx               # Hiển thị công thức ∑Ssx nhiều dòng (panel form đơn)
+│   ├── HintInput.tsx                    # Input Ant Design + tooltip khi hover/tràn chữ
+│   ├── HintInputNumber.tsx              # InputNumber + tooltip (ô số tiền, kích thước)
+│   ├── HintSelect.tsx                   # Select + tooltip + ellipsis option
+│   ├── LineHistoryPickerModal.tsx       # Modal F4: tìm & chọn dòng từ đơn cũ
+│   ├── ProductImageField.tsx            # Upload/chọn ảnh minh họa SP (màn Sản phẩm)
+│   ├── ProtectedRoute.tsx               # Redirect /login nếu chưa có token
+│   └── TableSearchBar.tsx               # Ô tìm kiếm lọc client-side trên bảng
+├── hooks/
+│   └── useOpenCreateFromNavigation.ts   # Mở modal tạo mới khi navigate có state.openCreate
+├── layouts/
+│   ├── MainLayout.tsx                   # Sidebar cố định + thu gọn, header, menu, đổi MK, logout
+│   └── MainLayout.css                   # Style sidebar fixed, collapse, offset nội dung
+├── pages/
+│   ├── DashboardPage.tsx                # Thống kê tổng quan + nút tạo nhanh; xử lý lỗi API
+│   ├── LoginPage.tsx                    # Form login + captcha
+│   ├── LoginPage.css                    # Style trang đăng nhập
+│   ├── MaterialsPage.tsx                # CRUD loại tôn (nguyên liệu)
+│   ├── OrderFormPage.tsx                # Form tạo/sửa/sao chép đơn: bảng nhiều dòng,
+│   │                                    #   preview debounce, validation, di chuyển/xóa dòng
+│   ├── OrdersPage.tsx                   # Danh sách đơn: sửa, sao chép, xuất Excel (confirm),
+│   │                                    #   đổi trạng thái, xóa
+│   ├── ProductsPage.tsx                 # CRUD nhóm SP + tham số + công thức + ảnh
+│   └── UsersPage.tsx                    # CRUD user (admin), reset mật khẩu
+└── utils/
+    ├── apiError.ts                      # Trích message lỗi từ Axios response
+    ├── apiError.test.ts                 # Unit test apiError
+    ├── auditDisplay.tsx                 # Cột audit bảng (ngày tạo/sửa, user) + format
+    ├── baoGiaFormMapper.ts              # Map entity báo giá ↔ form; parseThamSoNhapJson;
+    │                                    #   quy đổi tiền tôn/1 cái ↔ tổng
+    ├── baoGiaFormMapper.test.ts         # Test parse JSON tham số an toàn
+    ├── imageUrl.ts                      # Ghép URL ảnh master từ path API
+    ├── orderFormLineRemap.ts            # Remap index preview/manual-ton khi move/xóa dòng
+    ├── orderFormLineRemap.test.ts       # Test remap sau move/remove
+    ├── orderFormPreview.ts              # Debounce preview: field nào gọi API, chữ ký cache
+    ├── orderFormPreview.test.ts         # Test logic refresh preview
+    ├── orderFormPricing.ts              # Tính đơn giá/thành tiền/tổng thuế client-side
+    ├── orderFormPricing.test.ts         # Test công thức giá frontend
+    ├── productFormParams.ts             # Sắp xếp tham số SP, map W/H, phát hiện trùng tên
+    ├── tableCellRender.tsx                # renderEllipsisCell cho cột bảng
+    ├── tableColumns.ts                  # Helper cột STT
+    └── tableSearch.ts                   # Lọc bảng theo chuỗi tìm kiếm
+```
 
-- Manages product groups
-- Manages material types
-- Manages users
+---
 
-## Key Files
+## Tầng kiến trúc
 
-- Startup and middleware: `OngGio.Api/Program.cs`
-- Auth endpoints: `OngGio.Api/Controllers/AuthController.cs`
-- Dashboard endpoints: `OngGio.Api/Controllers/DashboardController.cs`
-- Quotation endpoints: `OngGio.Api/Controllers/BaoGiaController.cs`
-- Calculation endpoints: `OngGio.Api/Controllers/CalculationController.cs`
-- Product group endpoints: `OngGio.Api/Controllers/NhomSanPhamController.cs`
-- Material endpoints: `OngGio.Api/Controllers/LoaiTonController.cs`
-- User management: `OngGio.Api/Controllers/NguoiDungController.cs`
+| Project | Trách nhiệm |
+|---------|-------------|
+| `OngGio.Api` | HTTP, JWT, Swagger, CORS, static files, map controller |
+| `OngGio.Application` | `CalculationEngine`, `DbFormulaEvaluator`, interface service/DTO |
+| `OngGio.Domain` | Entity EF Core, `AuditableEntity` |
+| `OngGio.Infrastructure` | DbContext, migration, `BaoGiaService`, seed, export Excel |
 
-## Data Initialization
+## Luồng xử lý chính
 
-On startup, the infrastructure layer:
+```
+Login → JWT
+  → Form đơn: POST /api/calculation/preview (từng dòng, debounce)
+  → Lưu đơn: POST/PUT /api/bao-gia
+      → BaoGiaService → CalculationEngine → DbFormulaEvaluator(CongThucDienTich)
+      → Lưu ChiTietBaoGia + tổng tiền
+  → Xuất Excel: GET /api/bao-gia/{id}/export-excel → BaoGiaExcelExporter
+```
 
-- Applies EF Core migrations
-- Seeds product groups and their parameters
-- Seeds material records
-- Seeds a default admin user
+## Công thức giá (thống nhất FE/BE)
 
-## Chi Tiết Theo File
+- **Giá tôn** = tiền tôn cho 1 cái (có thể nhập tay trên form)
+- **Đơn giá** = `DonGiaMetToi` × ∑Ssx mét tới + nhân công + phụ kiện
+- **Thành tiền** = đơn giá × số lượng
+- **∑Ssx mét tới** = ∑Ssx (m²) ÷ 1.2
 
-### `OngGio.Api`
+## Chạy test
 
-- `Program.cs`: file khởi động của API. Đăng ký Application/Infrastructure, cấu hình JWT, bật Swagger, bật CORS cho frontend, map controllers và chạy seed dữ liệu.
-- `Controllers/AuthController.cs`: xử lý lấy captcha và đăng nhập. Kiểm tra tên đăng nhập, mật khẩu, captcha trước khi trả JWT và thông tin user.
-- `Controllers/BaoGiaController.cs`: quản lý báo giá/đơn hàng. Hỗ trợ lấy danh sách, xem chi tiết, tạo mới, cập nhật, đổi trạng thái, xóa và export Excel.
-- `Controllers/CalculationController.cs`: cung cấp endpoint preview công thức để frontend xem trước kết quả tính toán.
-- `Controllers/DashboardController.cs`: trả thống kê dashboard từ service.
-- `Controllers/HealthController.cs`: endpoint healthcheck đơn giản để kiểm tra service còn sống.
-- `Controllers/LoaiTonController.cs`: CRUD dữ liệu loại tôn, gồm thương hiệu, độ dày, đơn giá, kg/mét tới và bảng barem JSON.
-- `Controllers/NhomSanPhamController.cs`: CRUD nhóm sản phẩm và danh sách tham số cố định đi kèm từng nhóm.
-- `OngGio.Api.http`: file gọi thử API trong IDE.
-- `appsettings.json` và `appsettings.Development.json`: cấu hình connection string, JWT, logging và các setting môi trường.
-- `Properties/launchSettings.json`: profile chạy local cho API.
+```bash
+dotnet test tests/OngGio.Application.Tests
+dotnet test tests/OngGio.Infrastructure.Tests
 
-### `OngGio.Application`
-
-- `DependencyInjection.cs`: đăng ký các công thức tính diện tích và `ICalculationEngine`.
-- `Abstractions/IAuthService.cs`: hợp đồng cho dịch vụ đăng nhập.
-- `Abstractions/ICaptchaService.cs`: hợp đồng tạo và xác thực captcha.
-- `Abstractions/ICurrentUserService.cs`: hợp đồng lấy user hiện tại phục vụ audit.
-- `Calculation/CalculationEngine.cs`: trung tâm tính toán. Chọn công thức theo nhóm sản phẩm, hợp nhất tham số mặc định và tham số nhập tay, rồi tính diện tích, trọng lượng, đơn giá và thành tiền.
-- `Calculation/CalculationModels.cs`: model đầu vào/đầu ra cho tính toán.
-- `Calculation/Formulas/AreaFormulaHelper.cs`: helper dùng chung cho các công thức diện tích.
-- `Calculation/Formulas/Co90AreaFormula.cs`: công thức cho co 90 độ.
-- `Calculation/Formulas/Co45AreaFormula.cs`: công thức cho co 45 độ.
-- `Calculation/Formulas/OngThangAreaFormula.cs`: công thức cho ống thẳng.
-- `Calculation/Formulas/OngBitDauAreaFormula.cs`: công thức cho ống bít một đầu.
-- `Calculation/Formulas/TeCutAreaFormula.cs`: công thức cho tê cút.
-- `Calculation/Formulas/TeReAreaFormula.cs`: công thức cho tê rẽ.
-- `Calculation/Formulas/GiamAreaFormula.cs`: công thức cho giảm/côn thu.
-- `Calculation/Formulas/ChanReAreaFormula.cs`: công thức cho chân rẽ.
-- `Calculation/Formulas/BzAreaFormula.cs`: công thức cho BZ/ống lệch tâm.
-- `Calculation/Formulas/HopPlenumAreaFormula.cs`: công thức cho hộp plenum.
-- `Calculation/Formulas/ChacAreaFormula.cs`: công thức cho dạng chắc.
-- `Calculation/Formulas/IAreaFormula.cs`: interface chuẩn cho các công thức diện tích.
-- `Services/DashboardStats.cs`: record chứa dữ liệu thống kê dashboard.
-- `Services/IBaoGiaService.cs`: hợp đồng thao tác báo giá, preview, export và cập nhật trạng thái.
-
-### `OngGio.Domain`
-
-- `Common/AuditableEntity.cs`: lớp nền cho audit field như `CreatedAt`, `UpdatedAt`, `CreatedBy`, `UpdatedBy`.
-- `Entities/BaoGia.cs`: entity báo giá, chứa mã báo giá, khách hàng, thuế suất, tổng tiền và trạng thái.
-- `Entities/ChiTietBaoGia.cs`: entity chi tiết báo giá, lưu thông tin sản phẩm, kích thước, tham số nhập, kết quả tính toán và quan hệ sang nhóm sản phẩm/loại tôn.
-- `Entities/LoaiTon.cs`: entity loại tôn, lưu thương hiệu, độ dày, giá/m2, kg/mét tới và barem JSON.
-- `Entities/NguoiDung.cs`: entity người dùng, lưu tên đăng nhập, họ tên, hash mật khẩu, vai trò và trạng thái hoạt động.
-- `Entities/NhomSanPham.cs`: entity nhóm sản phẩm, chứa tên nhóm, ảnh minh họa và các tham số cố định.
-- `Entities/ThamSoCoDinh.cs`: entity tham số cố định của nhóm sản phẩm.
-
-### `OngGio.Infrastructure`
-
-- `DependencyInjection.cs`: đăng ký DbContext, memory cache, captcha, current user, báo giá, dashboard, auth service và seed dữ liệu ban đầu.
-- `Persistence/OngGioDbContext.cs`: cấu hình bảng, khóa chính, quan hệ, kiểu dữ liệu, audit columns và logic tự động set audit khi `SaveChangesAsync`.
-- `Security/PasswordHasher.cs`: hash và verify mật khẩu.
-- `Services/AuthService.cs`: xác thực user bằng tên đăng nhập + mật khẩu, kiểm tra trạng thái hoạt động và sinh JWT.
-- `Services/BaoGiaService.cs`: service nghiệp vụ chính của báo giá. Tạo/cập nhật/xóa báo giá, tính preview từng dòng, tổng hợp tổng tiền, export Excel, và load dữ liệu tính toán từ database.
-- `Services/CaptchaService.cs`: tạo captcha ngẫu nhiên, render ảnh PNG base64, cache đáp án tạm thời và xác thực captcha một lần.
-- `Services/CurrentUserService.cs`: cung cấp user hiện tại cho audit. Hiện đang trả về giá trị mặc định `system`.
-- `Services/DashboardService.cs`: lấy số liệu dashboard từ database.
-- `Migrations/*.cs`: lịch sử thay đổi schema của PostgreSQL. Bao gồm khởi tạo bảng, thêm tính năng quản lý, thêm tham số đầu vào cho dòng, thêm tên sản phẩm, thêm đơn vị tính/thuế, và thêm `kg/mét tới` cho loại tôn.
-- `Migrations/OngGioDbContextModelSnapshot.cs`: snapshot EF Core dùng để so sánh schema hiện tại khi tạo migration mới.
-
-## Ghi Chú Luồng Xử Lý
-
-- Frontend gọi `AuthController` để lấy captcha và đăng nhập.
-- Sau khi có JWT, các màn hình quản trị gọi `BaoGiaController`, `LoaiTonController`, `NhomSanPhamController`, `NguoiDungController` và `DashboardController`.
-- `BaoGiaService` là nơi gom logic quan trọng nhất: lấy dữ liệu gốc, chạy công thức, tính tổng tiền, và sinh file Excel.
+cd frontend/ong-gio-web
+npm run test:run
+```

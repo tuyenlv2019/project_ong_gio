@@ -24,6 +24,18 @@ export function thanhTienTonTotalToPerPiece(thanhTienTonTotal: number, soLuong: 
   return soLuong > 0 ? Math.round(thanhTienTonTotal / soLuong) : thanhTienTonTotal;
 }
 
+/** Parse `thamSoNhapJson` an toàn — JSON hỏng trả về `{}`. */
+export function parseThamSoNhapJson(json?: string | null): Record<string, number> {
+  if (!json?.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
 export function mapChiTietToLineInput(c: ChiTietBaoGia, bg: BaoGia): LineFormValues {
   return {
     tenSanPham: c.tenSanPham,
@@ -35,7 +47,7 @@ export function mapChiTietToLineInput(c: ChiTietBaoGia, bg: BaoGia): LineFormVal
     h: c.hInput,
     thanhTienTon: thanhTienTonTotalToPerPiece(c.thanhTienTon, c.soLuong),
     thanhTienTonManual: true,
-    thamSoNhap: c.thamSoNhapJson ? JSON.parse(c.thamSoNhapJson) : {},
+    thamSoNhap: parseThamSoNhapJson(c.thamSoNhapJson),
     soLuong: c.soLuong,
     giaNhanCong: c.giaNhanCong ?? 0,
     phuKien: c.phuKien ?? 0,

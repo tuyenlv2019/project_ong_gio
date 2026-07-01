@@ -1,23 +1,58 @@
 /**
  * Trang dashboard hiển thị thống kê tổng quan của hệ thống.
  */
-import { Card, Col, Row, Statistic, Button, Space } from 'antd';
-import { useEffect, useState } from 'react';
+import { Alert, Button, Card, Col, Row, Space, Statistic } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatMoney, getDashboardStats } from '../api';
 import { authService } from '../authService';
 import type { DashboardStats } from '../types';
 
+type LoadState = 'loading' | 'ready' | 'error';
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const load = () => getDashboardStats().then(setStats).catch(() => setStats(null));
-    load();
-    window.addEventListener('focus', load);
-    return () => window.removeEventListener('focus', load);
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoadState('loading');
+    return getDashboardStats()
+      .then((data) => {
+        setStats(data);
+        setLoadState('ready');
+      })
+      .catch(() => {
+        if (!silent) setLoadState('error');
+      });
   }, []);
+
+  useEffect(() => {
+    void load();
+    const onFocus = () => void load(true);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
+
+  if (loadState === 'loading' && !stats) {
+    return <Card loading />;
+  }
+
+  if (loadState === 'error' && !stats) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="Không tải được thống kê dashboard"
+        description="Kiểm tra kết nối mạng hoặc thử lại sau."
+        action={(
+          <Button size="small" onClick={() => void load()}>
+            Thử lại
+          </Button>
+        )}
+      />
+    );
+  }
 
   if (!stats) return <Card loading />;
 

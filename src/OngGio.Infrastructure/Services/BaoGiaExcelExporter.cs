@@ -9,7 +9,8 @@ namespace OngGio.Infrastructure.Services;
 internal static class BaoGiaExcelExporter
 {
     private const string TemplateFileName = "BaoGiaExportTemplate.xlsx";
-    private const string WorksheetName = "Báo giá";
+    private const string OutputWorksheetName = "Báo giá";
+    private static readonly string[] TemplateWorksheetNames = ["Báo giá", "Sheet 2"];
     private const int DataStartRow = 5;
     private const int StyleSourceRow = 5;
     private const int FooterStartRow = 6;
@@ -26,13 +27,15 @@ internal static class BaoGiaExcelExporter
         var templatePath = ResolveTemplatePath();
 
         using var templateWorkbook = new XLWorkbook(templatePath);
-        var templateSheet = templateWorkbook.Worksheet(WorksheetName);
+        var templateSheet = GetExportWorksheet(templateWorkbook);
 
         using var workbook = new XLWorkbook(templatePath);
-        foreach (var extraSheet in workbook.Worksheets.Where(w => w.Name != WorksheetName).ToList())
+        var sheet = GetExportWorksheet(workbook);
+        foreach (var extraSheet in workbook.Worksheets.Where(w => w != sheet).ToList())
             extraSheet.Delete();
 
-        var sheet = workbook.Worksheet(WorksheetName);
+        if (!string.Equals(sheet.Name, OutputWorksheetName, StringComparison.Ordinal))
+            sheet.Name = OutputWorksheetName;
         RemoveAllPictures(sheet);
 
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? FooterEndRow;
@@ -114,6 +117,18 @@ internal static class BaoGiaExcelExporter
 
         foreach (var col in FormulaColumns)
             sheet.Cell(row, col).Style.Fill = formulaFill;
+    }
+
+    private static IXLWorksheet GetExportWorksheet(XLWorkbook workbook)
+    {
+        foreach (var name in TemplateWorksheetNames)
+        {
+            var sheet = workbook.Worksheets.FirstOrDefault(w => w.Name == name);
+            if (sheet is not null)
+                return sheet;
+        }
+
+        return workbook.Worksheets.Worksheet(1);
     }
 
     private static string ResolveTemplatePath()

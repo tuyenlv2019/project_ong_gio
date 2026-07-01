@@ -3,9 +3,10 @@
  */
 import { Card, Form, Input, Button, message, Spin, Typography } from 'antd';
 import { LockOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../authService';
+import { getApiErrorMessage } from '../utils/apiError';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -16,11 +17,7 @@ export default function LoginPage() {
   const [captchaLoading, setCaptchaLoading] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadCaptcha();
-  }, []);
-
-  const loadCaptcha = async () => {
+  const loadCaptcha = useCallback(async () => {
     setCaptchaLoading(true);
     try {
       const captcha = await authService.getCaptcha();
@@ -33,7 +30,11 @@ export default function LoginPage() {
     } finally {
       setCaptchaLoading(false);
     }
-  };
+  }, [form]);
+
+  useEffect(() => {
+    void loadCaptcha();
+  }, [loadCaptcha]);
 
   const onFinish = async (values: { tenDangNhap: string; matKhau: string; captchaValue: string }) => {
     setLoading(true);
@@ -59,7 +60,7 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error(error);
-      const apiMsg = (error as any)?.response?.data?.message;
+      const apiMsg = getApiErrorMessage(error, '');
       if (apiMsg && apiMsg.toLowerCase().includes('captcha')) {
         message.error('Captcha không đúng');
       } else {

@@ -12,6 +12,7 @@ import type { NguoiDung } from '../types';
 import { createSttColumn } from '../utils/tableColumns';
 import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
 import { renderEllipsisCell } from '../utils/tableCellRender';
+import { getApiErrorMessage } from '../utils/apiError';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 
 function getUserSearchText(row: NguoiDung) {
@@ -36,9 +37,12 @@ export default function UsersPage() {
   const [resetForm] = Form.useForm<{ matKhauMoi: string; xacNhanMatKhauMoi: string }>();
   const isAdmin = authService.isAdmin();
 
-  const load = async () => setData(await getNguoiDungs());
+  const reload = () => {
+    void getNguoiDungs().then(setData);
+  };
+
   useEffect(() => {
-    load();
+    reload();
   }, []);
 
   const filteredData = useMemo(
@@ -68,7 +72,7 @@ export default function UsersPage() {
       message.success('Đã thêm user');
     }
     setOpen(false);
-    load();
+    reload();
   };
 
   const openResetModal = (item: NguoiDung) => {
@@ -85,8 +89,8 @@ export default function UsersPage() {
       message.success(result.message || 'Đã reset mật khẩu');
       setResetOpen(false);
       setResettingUser(null);
-    } catch (err: any) {
-      message.error(err?.response?.data?.message || 'Reset mật khẩu thất bại');
+    } catch (err: unknown) {
+      message.error(getApiErrorMessage(err, 'Reset mật khẩu thất bại'));
     }
   };
 
@@ -141,7 +145,7 @@ export default function UsersPage() {
                   onConfirm={async () => {
                     await deleteNguoiDung(row.id);
                     message.success('Đã xóa');
-                    load();
+                    reload();
                   }}
                 >
                   <Button size="small" danger icon={<DeleteOutlined />} />

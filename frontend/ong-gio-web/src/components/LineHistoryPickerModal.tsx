@@ -59,11 +59,6 @@ export default function LineHistoryPickerModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-    setSearch(initialSearch);
-  }, [open, initialSearch]);
-
-  useEffect(() => {
     if (!open) return undefined;
 
     const timer = window.setTimeout(async () => {
@@ -86,6 +81,9 @@ export default function LineHistoryPickerModal({
       title="Chọn sản phẩm từ đơn hàng cũ"
       open={open}
       onCancel={onClose}
+      afterOpenChange={(visible) => {
+        if (visible) setSearch(initialSearch);
+      }}
       footer={null}
       width={1060}
       destroyOnClose

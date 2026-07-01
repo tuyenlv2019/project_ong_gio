@@ -2,6 +2,7 @@
  * Dịch vụ đăng nhập: captcha, token, user localStorage và logout.
  */
 import axios from 'axios';
+import { getApiErrorMessage } from './utils/apiError';
 import { API_BASE } from './types';
 
 interface LoginResponse {
@@ -82,8 +83,8 @@ class AuthService {
       }
 
       return data;
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Đăng nhập thất bại';
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err, 'Đăng nhập thất bại');
       return {
         success: false,
         message: msg,
@@ -110,8 +111,8 @@ class AuthService {
         xacNhanMatKhauMoi,
       });
       return { success: !!data.success, message: data.message };
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Đổi mật khẩu thất bại';
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err, 'Đổi mật khẩu thất bại');
       return { success: false, message: msg };
     }
   }

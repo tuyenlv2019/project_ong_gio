@@ -58,7 +58,7 @@ export default function MainLayout() {
   const user = authService.getUser();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const sidebarPreferenceRef = useRef(readSidebarCollapsed());
-  const [collapsed, setCollapsed] = useState(() => sidebarPreferenceRef.current);
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
 
   const updateCollapsed = (value: boolean, persist: boolean) => {
     setCollapsed(value);

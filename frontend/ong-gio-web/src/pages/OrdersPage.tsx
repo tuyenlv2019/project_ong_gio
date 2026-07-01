@@ -67,17 +67,15 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
-  const load = async () => {
+  const reload = () => {
     setLoading(true);
-    try {
-      setData(await getBaoGias());
-    } finally {
-      setLoading(false);
-    }
+    void getBaoGias()
+      .then(setData)
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    load();
+    reload();
   }, []);
 
   const filteredData = useMemo(
@@ -88,13 +86,17 @@ export default function OrdersPage() {
   const onDelete = async (id: number) => {
     await deleteBaoGia(id);
     message.success('Đã xóa đơn hàng');
-    load();
+    reload();
   };
 
   const onStatusChange = async (id: number, trangThai: string) => {
     await updateBaoGiaStatus(id, trangThai);
     message.success('Đã cập nhật trạng thái');
-    load();
+    reload();
+  };
+
+  const onExportExcel = (row: BaoGia) => {
+    window.open(getBaoGiaExportUrl(row.id), '_blank');
   };
 
   return (
@@ -165,11 +167,19 @@ export default function OrdersPage() {
                   />
                 </Tooltip>
                 <Tooltip title="Xuất Excel">
-                  <Button
-                    size="small"
-                    icon={<DownloadOutlined />}
-                    onClick={() => window.open(getBaoGiaExportUrl(row.id), '_blank')}
-                  />
+                  <Popconfirm
+                    title="Xuất file Excel?"
+                    description={
+                      row.tenKhachHang?.trim()
+                        ? `${row.maBaoGia} — ${row.tenKhachHang}`
+                        : row.maBaoGia
+                    }
+                    okText="Xuất"
+                    cancelText="Hủy"
+                    onConfirm={() => onExportExcel(row)}
+                  >
+                    <Button size="small" icon={<DownloadOutlined />} />
+                  </Popconfirm>
                 </Tooltip>
                 <Popconfirm title="Xóa đơn hàng?" onConfirm={() => onDelete(row.id)}>
                   <Button size="small" danger icon={<DeleteOutlined />} />

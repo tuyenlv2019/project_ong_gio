@@ -11,8 +11,9 @@
 
 // --- Thư viện UI & routing ---
 import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { ArrowDownOutlined, ArrowUpOutlined, CopyOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition, type Key } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   createBaoGia,
@@ -37,6 +38,7 @@ import LineHistoryPickerModal from '../components/LineHistoryPickerModal';
 import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
 import {
   mapBaoGiaToLineInputs,
+  parseThamSoNhapJson,
   suggestThanhTienTon,
   thanhTienTonTotalToPerPiece,
 } from '../utils/baoGiaFormMapper';
@@ -47,16 +49,27 @@ import {
   nhomSelectionChanged,
 } from '../utils/orderFormPreview';
 import {
+  AreaPreviewCell,
   DimensionFieldsCell,
   LineGhiChuImageCell,
   LineValueCell,
+  NhomSelectCell,
   OrderTotalsFooter,
+  TonInfoCell,
 } from '../components/order/OrderLineCells';
+import {
+  remapIndexSetAfterMove,
+  remapIndexSetAfterRemove,
+  remapRecordKeysAfterMove,
+  remapRecordKeysAfterRemove,
+} from '../utils/orderFormLineRemap';
 
 const { Title, Text } = Typography;
 
 /** Tổng chiều rộng tối thiểu bảng cụm sản phẩm (sum width các cột). */
 const ORDER_PRODUCT_TABLE_SCROLL_X = 1379;
+
+type LineListField = { name: number; key: Key };
 
 // =============================================================================
 // Helper UI nhỏ
@@ -245,48 +258,6 @@ function getMovableRowCount(items: Partial<LineFormValues>[]) {
   return lastIsBuffer ? items.length - 1 : items.length;
 }
 
-/** Cập nhật index trong Set sau khi Form.List move dòng. */
-function remapIndexSetAfterMove(indices: Set<number>, fromIndex: number, toIndex: number) {
-  const next = new Set<number>();
-  indices.forEach((index) => {
-    if (index === fromIndex) {
-      next.add(toIndex);
-      return;
-    }
-    if (fromIndex < toIndex && index > fromIndex && index <= toIndex) {
-      next.add(index - 1);
-      return;
-    }
-    if (fromIndex > toIndex && index >= toIndex && index < fromIndex) {
-      next.add(index + 1);
-      return;
-    }
-    next.add(index);
-  });
-  return next;
-}
-
-/** Dịch chuyển key trong record theo thao tác move dòng Form.List. */
-function remapRecordKeysAfterMove<T>(record: Record<number, T>, fromIndex: number, toIndex: number) {
-  const max = Math.max(
-    ...Object.keys(record).map(Number),
-    fromIndex,
-    toIndex,
-    0,
-  );
-  const arr: (T | undefined)[] = Array.from({ length: max + 1 });
-  Object.entries(record).forEach(([key, value]) => {
-    arr[Number(key)] = value;
-  });
-  const [moved] = arr.splice(fromIndex, 1);
-  arr.splice(toIndex, 0, moved);
-  const next: Record<number, T> = {};
-  arr.forEach((value, index) => {
-    if (value !== undefined) next[index] = value;
-  });
-  return next;
-}
-
 /** Giá trị mặc định khi thêm dòng sản phẩm mới. */
 const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
 
@@ -333,6 +304,14 @@ export default function OrderFormPage() {
   const [nhomList, setNhomList] = useState<NhomSanPham[]>([]);
   const orderableNhomList = useMemo(() => filterOrderableNhoms(nhomList), [nhomList]);
   const nhomById = useMemo(() => new Map(nhomList.map((n) => [n.id, n])), [nhomList]);
+  const baseNhomOptions = useMemo(
+    () => orderableNhomList.map((n) => ({ value: n.id, label: n.tenNhom })),
+    [orderableNhomList],
+  );
+  const orderableNhomIds = useMemo(
+    () => new Set(orderableNhomList.map((n) => n.id)),
+    [orderableNhomList],
+  );
   const [loaiTonList, setLoaiTonList] = useState<LoaiTon[]>([]);
   const loaiTonById = useMemo(() => new Map(loaiTonList.map((t) => [t.id, t])), [loaiTonList]);
   const [preview] = useState<CalculationResult | null>(null);
@@ -344,6 +323,15 @@ export default function OrderFormPage() {
   const pendingPreviewValuesRef = useRef<{ lineInputs?: LineFormValues[] } | null>(null);
   const pendingPreviewIndicesRef = useRef<number[] | 'all'>([]);
   const validationTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const internalFormUpdateRef = useRef(false);
+  const isFormHydratingRef = useRef(false);
+  const refreshPreviewsRef = useRef<
+    (
+      allValues: { lineInputs?: LineFormValues[] },
+      customNhomList?: NhomSanPham[],
+      lineIndicesToRefresh?: number[] | 'all',
+    ) => Promise<Record<number, CalculationResult>>
+  >(() => Promise.resolve({}));
   const [validationLines, setValidationLines] = useState<LineFormValues[]>([]);
 
   // --- UI state ---
@@ -368,6 +356,7 @@ export default function OrderFormPage() {
     Boolean(line?.thanhTienTonManual) || thanhTienTonManualLinesRef.current.has(index);
 
   const markManualTonFromChange = (changedValues: { lineInputs?: Array<Partial<LineFormValues> | null> }) => {
+    if (isAutoUpdatingThanhTienTonRef.current) return;
     const changedLines = changedValues?.lineInputs;
     if (!Array.isArray(changedLines)) return;
     changedLines.forEach((patch, index) => {
@@ -416,19 +405,6 @@ export default function OrderFormPage() {
     [],
   );
 
-  /** Options loại SP cho dropdown: chỉ SP có công thức; giữ lựa chọn cũ khi sửa đơn. */
-  const getNhomSelectOptions = (lineIndex: number) => {
-    const options = orderableNhomList.map((n) => ({ value: n.id, label: n.tenNhom }));
-    const currentId = Number(form.getFieldValue(['lineInputs', lineIndex, 'nhomSanPhamId']));
-    if (currentId && !orderableNhomList.some((n) => n.id === currentId)) {
-      const legacy = nhomList.find((n) => n.id === currentId);
-      if (legacy) {
-        options.push({ value: legacy.id, label: `${legacy.tenNhom} (chưa có công thức)` });
-      }
-    }
-    return options;
-  };
-
   /** Cập nhật offset header bảng khi khối sticky đổi kích thước (resize / copy banner). */
   useEffect(() => {
     const stickyHeader = stickyHeaderRef.current;
@@ -448,102 +424,6 @@ export default function OrderFormPage() {
       window.removeEventListener('resize', updateStickyOffset);
     };
   }, [copySourceMa]);
-
-  /**
-   * Load master data và khởi tạo form:
-   * - Sửa: nạp báo giá theo `id`
-   * - Sao chép: nạp từ `copyFromId`, bỏ tên KH, reset trạng thái
-   * - Tạo mới: một dòng rỗng
-   */
-  useEffect(() => {
-    (async () => {
-      const [nhoms, tons] = await Promise.all([getNhomSanPhams(), getLoaiTons()]);
-      const orderableNhoms = filterOrderableNhoms(nhoms);
-      setNhomList(nhoms);
-      setLoaiTonList(tons);
-
-      if (isEdit && id) {
-        const bg = await getBaoGia(Number(id));
-        const initialLines = mapBaoGiaToLineInputs(bg);
-        const lineInputs = initialLines.length > 0
-          ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
-          : [createEmptyLine(orderableNhoms, tons)];
-        form.setFieldsValue({
-          tenKhachHang: bg.tenKhachHang,
-          trangThai: bg.trangThai || 'CHUA_XU_LY',
-          lineInputs,
-        });
-        if (initialLines.length > 0) {
-          await refreshPreviews({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
-          setValidationLines(lineInputs as LineFormValues[]);
-        }
-      } else if (copyFromId) {
-        try {
-          const bg = await getBaoGia(copyFromId);
-          setCopySourceMa(bg.maBaoGia);
-          const initialLines = mapBaoGiaToLineInputs(bg);
-          const lineInputs = initialLines.length > 0
-            ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
-            : [createEmptyLine(orderableNhoms, tons)];
-          form.setFieldsValue({
-            tenKhachHang: '',
-            trangThai: 'CHUA_XU_LY',
-            lineInputs,
-          });
-          if (initialLines.length > 0) {
-            await refreshPreviews({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
-            setValidationLines(lineInputs as LineFormValues[]);
-          }
-        } catch {
-          message.error('Không tải được đơn hàng để sao chép');
-          navigate('/don-hang/tao-moi', { replace: true });
-        }
-      } else if (orderableNhoms[0] && tons[0]) {
-        form.setFieldsValue({
-          trangThai: 'CHUA_XU_LY',
-          lineInputs: [createEmptyLine(orderableNhoms, tons)],
-        });
-      }
-    })();
-  }, [form, id, isEdit, copyFromId, navigate]);
-
-  /**
-   * Nếu dòng cuối đã được điền, tự động thêm một dòng rỗng mới.
-   * @param allValues Toàn bộ giá trị hiện tại của form.
-   */
-  const ensureNewRowIfNeeded = (allValues: any) => {
-    const items = allValues.lineInputs || [];
-    if (items.length === 0) {
-      form.setFieldsValue({ lineInputs: [createEmptyLine(orderableNhomList, loaiTonList)] });
-      return;
-    }
-    const last = items[items.length - 1];
-    const lastNhom = nhomList.find((n) => n.id === Number(last?.nhomSanPhamId));
-    const filled =
-      last &&
-      last.tenSanPham &&
-      last.nhomSanPhamId &&
-      last.loaiTonId &&
-      last.soLuong > 0 &&
-      hasAllDimensions(last, lastNhom);
-    if (filled) {
-      form.setFieldsValue({ lineInputs: [...items, createEmptyLine(orderableNhomList, loaiTonList)] });
-    }
-  };
-
-  /** Xóa kích thước & preview của dòng khi đổi loại sản phẩm. */
-  const clearLineDimensions = useCallback((lineIndex: number) => {
-    form.setFieldValue(['lineInputs', lineIndex, 'w'], undefined);
-    form.setFieldValue(['lineInputs', lineIndex, 'h'], undefined);
-    form.setFieldValue(['lineInputs', lineIndex, 'thamSoNhap'], {});
-    delete previewSignatureRef.current[lineIndex];
-    setLinePreviews((prev) => {
-      if (prev[lineIndex] === undefined) return prev;
-      const next = { ...prev };
-      delete next[lineIndex];
-      return next;
-    });
-  }, [form]);
 
   /**
    * Gọi API preview cho các dòng cần thiết (song song, có cache chữ ký).
@@ -640,6 +520,124 @@ export default function OrderFormPage() {
     [form, loaiTonById, nhomById, withManualTonFlags],
   );
 
+  useEffect(() => {
+    refreshPreviewsRef.current = refreshPreviews;
+  }, [refreshPreviews]);
+
+  /**
+   * Load master data và khởi tạo form:
+   * - Sửa: nạp báo giá theo `id`
+   * - Sao chép: nạp từ `copyFromId`, bỏ tên KH, reset trạng thái
+   * - Tạo mới: một dòng rỗng
+   */
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      isFormHydratingRef.current = true;
+      try {
+        const [nhoms, tons] = await Promise.all([getNhomSanPhams(), getLoaiTons()]);
+        if (!active) return;
+
+        const orderableNhoms = filterOrderableNhoms(nhoms);
+        setNhomList(nhoms);
+        setLoaiTonList(tons);
+
+        if (isEdit && id) {
+          try {
+            const bg = await getBaoGia(Number(id));
+            if (!active) return;
+
+            const initialLines = mapBaoGiaToLineInputs(bg);
+            const lineInputs = initialLines.length > 0
+              ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
+              : [createEmptyLine(orderableNhoms, tons)];
+            form.setFieldsValue({
+              tenKhachHang: bg.tenKhachHang,
+              trangThai: bg.trangThai || 'CHUA_XU_LY',
+              lineInputs,
+            });
+            if (initialLines.length > 0) {
+              await refreshPreviewsRef.current({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
+              if (!active) return;
+              setValidationLines(lineInputs as LineFormValues[]);
+            }
+          } catch {
+            if (!active) return;
+            message.error('Không tải được đơn hàng');
+            navigate('/don-hang', { replace: true });
+          }
+        } else if (copyFromId) {
+          try {
+            const bg = await getBaoGia(copyFromId);
+            if (!active) return;
+
+            setCopySourceMa(bg.maBaoGia);
+            const initialLines = mapBaoGiaToLineInputs(bg);
+            const lineInputs = initialLines.length > 0
+              ? [...initialLines, createEmptyLine(orderableNhoms, tons)]
+              : [createEmptyLine(orderableNhoms, tons)];
+            form.setFieldsValue({
+              tenKhachHang: '',
+              trangThai: 'CHUA_XU_LY',
+              lineInputs,
+            });
+            if (initialLines.length > 0) {
+              await refreshPreviewsRef.current({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
+              if (!active) return;
+              setValidationLines(lineInputs as LineFormValues[]);
+            }
+          } catch {
+            if (!active) return;
+            message.error('Không tải được đơn hàng để sao chép');
+            navigate('/don-hang/tao-moi', { replace: true });
+          }
+        } else if (orderableNhoms[0] && tons[0]) {
+          form.setFieldsValue({
+            trangThai: 'CHUA_XU_LY',
+            lineInputs: [createEmptyLine(orderableNhoms, tons)],
+          });
+        }
+      } catch {
+        if (!active) return;
+        message.error('Không tải được dữ liệu master (sản phẩm, loại tôn)');
+      } finally {
+        if (active) {
+          isFormHydratingRef.current = false;
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      isFormHydratingRef.current = false;
+    };
+  }, [form, id, isEdit, copyFromId, navigate]);
+
+  /**
+   * Nếu dòng cuối đã được điền, tự động thêm một dòng rỗng mới.
+   * @param allValues Toàn bộ giá trị hiện tại của form.
+   */
+  const ensureNewRowIfNeeded = (allValues: { lineInputs?: LineFormValues[] }) => {
+    const items = allValues.lineInputs || [];
+    if (items.length === 0) {
+      form.setFieldsValue({ lineInputs: [createEmptyLine(orderableNhomList, loaiTonList)] });
+      return;
+    }
+    const last = items[items.length - 1];
+    const lastNhom = nhomList.find((n) => n.id === Number(last?.nhomSanPhamId));
+    const filled =
+      last &&
+      last.tenSanPham &&
+      last.nhomSanPhamId &&
+      last.loaiTonId &&
+      last.soLuong > 0 &&
+      hasAllDimensions(last, lastNhom);
+    if (filled) {
+      form.setFieldsValue({ lineInputs: [...items, createEmptyLine(orderableNhomList, loaiTonList)] });
+    }
+  };
+
   /** Mở modal F4 chọn dòng từ đơn hàng cũ cho dòng `lineIndex`. */
   const openLineHistory = (lineIndex: number) => {
     setHistoryLineIndex(lineIndex);
@@ -672,6 +670,28 @@ export default function OrderFormPage() {
       previewSignatureRef.current,
       fromIndex,
       toIndex,
+    );
+  };
+
+  /** Đồng bộ preview sau khi Form.List xóa dòng. */
+  const remapLinePreviewsAfterRemove = (removedIndex: number) => {
+    setLinePreviews((prev) => {
+      const max = Math.max(...Object.keys(prev).map(Number), removedIndex, 0);
+      const arr: (CalculationResult | undefined)[] = Array.from({ length: max + 1 }, (_, i) => prev[i]);
+      arr.splice(removedIndex, 1);
+      const next: Record<number, CalculationResult> = {};
+      arr.forEach((preview, index) => {
+        if (preview !== undefined) next[index] = preview;
+      });
+      return next;
+    });
+    thanhTienTonManualLinesRef.current = remapIndexSetAfterRemove(
+      thanhTienTonManualLinesRef.current,
+      removedIndex,
+    );
+    previewSignatureRef.current = remapRecordKeysAfterRemove(
+      previewSignatureRef.current,
+      removedIndex,
     );
   };
 
@@ -748,7 +768,7 @@ export default function OrderFormPage() {
       loaiTonId: item.loaiTonId,
       w: item.w,
       h: item.h,
-      thamSoNhap: item.thamSoNhapJson ? JSON.parse(item.thamSoNhapJson) : {},
+      thamSoNhap: parseThamSoNhapJson(item.thamSoNhapJson),
       soLuong: item.soLuong,
       donViTinh: item.donViTinh ?? 'cái',
       thueSuat: (item.thueSuat ?? 0.08) * 100,
@@ -774,7 +794,7 @@ export default function OrderFormPage() {
    * Kiểm tra dòng chưa đủ thông tin để highlight đỏ trên bảng.
    * Bỏ qua dòng đệm cuối và dòng hoàn toàn trống.
    */
-  const isRowIncomplete = (item: any, lineIndex?: number, totalLines?: number) => {
+  const isRowIncomplete = (item: Partial<LineFormValues> | undefined, lineIndex?: number, totalLines?: number) => {
     if (
       lineIndex !== undefined &&
       totalLines !== undefined &&
@@ -811,7 +831,50 @@ export default function OrderFormPage() {
   /**
    * Khi form thay đổi: debounce preview API; bỏ qua API khi chỉ đổi giá/thuế/tên...
    */
-  const onValuesChange = (changedValues: any, allValues: any) => {
+  const onValuesChange = (changedValues: Record<string, unknown>, allValues: { lineInputs?: LineFormValues[] }) => {
+    if (isFormHydratingRef.current) return;
+
+    if (internalFormUpdateRef.current) {
+      internalFormUpdateRef.current = false;
+      return;
+    }
+
+    const changedLines = changedValues.lineInputs as Array<Record<string, unknown> | null> | undefined;
+    if (Array.isArray(changedLines)) {
+      const fieldsToSet: { name: (string | number)[]; value: unknown }[] = [];
+      const previewClears: number[] = [];
+      changedLines.forEach((patch, index) => {
+        if (patch && Object.prototype.hasOwnProperty.call(patch, 'nhomSanPhamId')) {
+          fieldsToSet.push(
+            { name: ['lineInputs', index, 'w'], value: undefined },
+            { name: ['lineInputs', index, 'h'], value: undefined },
+            { name: ['lineInputs', index, 'thamSoNhap'], value: {} },
+          );
+          previewClears.push(index);
+        }
+      });
+      if (fieldsToSet.length > 0) {
+        previewClears.forEach((index) => {
+          delete previewSignatureRef.current[index];
+        });
+        startTransition(() => {
+          setLinePreviews((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            previewClears.forEach((index) => {
+              if (next[index] !== undefined) {
+                delete next[index];
+                changed = true;
+              }
+            });
+            return changed ? next : prev;
+          });
+        });
+        internalFormUpdateRef.current = true;
+        form.setFields(fieldsToSet);
+      }
+    }
+
     markManualTonFromChange(changedValues);
 
     const items = allValues.lineInputs || [];
@@ -824,11 +887,13 @@ export default function OrderFormPage() {
 
     if (nhomSelectionChanged(changedValues)) {
       const rowWithNhom = [...items].reverse().find((item: LineFormValues) => item?.nhomSanPhamId);
-      if (rowWithNhom?.nhomSanPhamId) {
-        setSelectedNhomRow(nhomById.get(Number(rowWithNhom.nhomSanPhamId)));
-      } else {
-        setSelectedNhomRow(undefined);
-      }
+      startTransition(() => {
+        if (rowWithNhom?.nhomSanPhamId) {
+          setSelectedNhomRow(nhomById.get(Number(rowWithNhom.nhomSanPhamId)));
+        } else {
+          setSelectedNhomRow(undefined);
+        }
+      });
     }
 
     if (Array.isArray(indices) && indices.length === 0) {
@@ -1019,7 +1084,7 @@ export default function OrderFormPage() {
           <Form.List name="lineInputs">
             {(fields, { add, remove, move }) => {
               /** Định nghĩa cột bảng cụm sản phẩm — mỗi cột render Form.Item theo field.name */
-              const columns: any[] = [
+              const columns: ColumnsType<LineListField> = [
                 // Cột STT (tự tính từ index)
                 {
                   title: 'STT',
@@ -1028,24 +1093,25 @@ export default function OrderFormPage() {
                   align: 'center' as const,
                   onHeaderCell: () => ({ className: 'order-stt-column' }),
                   onCell: () => ({ className: 'order-stt-column' }),
-                  render: (_: any, __: any, idx: number) => idx + 1,
+                  render: (_: unknown, __: unknown, idx: number) => idx + 1,
                 },
                 // Cột loại SP + tên SP (F4 mở lịch sử)
                 {
                   title: 'Sản phẩm',
                   dataIndex: 'sanPham',
                   width: 260,
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
                         <FieldLabel>Loại sản phẩm</FieldLabel>
-                        <Form.Item name={[field.name, 'nhomSanPhamId']} noStyle rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}>
-                          <HintSelect
-                            placeholder="Chọn loại"
-                            options={getNhomSelectOptions(field.name)}
-                            onChange={() => clearLineDimensions(field.name)}
-                          />
-                        </Form.Item>
+                        <NhomSelectCell
+                          fieldName={field.name}
+                          form={form}
+                          baseOptions={baseNhomOptions}
+                          nhomList={nhomList}
+                          orderableNhomIds={orderableNhomIds}
+                          rules={requiredRulesFor('Loại sản phẩm') ?? [{ required: true, message: 'Chọn loại SP' }]}
+                        />
                       </div>
                       <div className="price-field-row">
                         <FieldLabel>Tên sản phẩm</FieldLabel>
@@ -1081,7 +1147,7 @@ export default function OrderFormPage() {
                   align: 'center' as const,
                   onCell: () => ({ className: 'dimension-column-cell' }),
                   onHeaderCell: () => ({ className: 'dimension-column-cell' }),
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <DimensionFieldsCell
                       fieldName={field.name}
                       form={form}
@@ -1097,34 +1163,18 @@ export default function OrderFormPage() {
                   width: 150,
                   onHeaderCell: () => ({ className: 'order-ton-column' }),
                   onCell: () => ({ className: 'order-ton-column' }),
-                  render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    return (
-                      <div className="price-fields-stack ton-fields-stack">
-                        <div className="price-field-row">
-                          <FieldLabel>Loại Tôn</FieldLabel>
-                          <Form.Item
-                            name={[field.name, 'loaiTonId']}
-                            noStyle
-                            rules={requiredRulesFor('Loại tôn') ?? requiredRulesFor('Xuất xứ/Độ dày tôn') ?? [{ required: true, message: 'Chọn loại tôn' }]}
-                          >
-                            <HintSelect
-                              className="ton-field-select"
-                              placeholder="Chọn tôn"
-                              tooltip="Loại tôn"
-                              options={loaiTonOptions}
-                            />
-                          </Form.Item>
-                        </div>
-                        <div className="price-field-row">
-                          <FieldLabel>Khối lượng(Kg)</FieldLabel>
-                          <span className="display-value ton-display-value" title={preview ? `${preview.trongLuongKg.toFixed(1)} kg` : undefined}>
-                            {preview ? `${preview.trongLuongKg.toFixed(1)} kg` : '-'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  },
+                  render: (_: unknown, field: LineListField) => (
+                    <TonInfoCell
+                      fieldName={field.name}
+                      loaiTonOptions={loaiTonOptions}
+                      trongLuongKg={linePreviews[field.name]?.trongLuongKg}
+                      loaiTonRules={
+                        requiredRulesFor('Loại tôn')
+                        ?? requiredRulesFor('Xuất xứ/Độ dày tôn')
+                        ?? [{ required: true, message: 'Chọn loại tôn' }]
+                      }
+                    />
+                  ),
                 },
                 // Cột diện tích sản xuất (chỉ đọc từ preview)
                 {
@@ -1134,33 +1184,16 @@ export default function OrderFormPage() {
                   align: 'left' as const,
                   onHeaderCell: () => ({ className: 'order-area-column' }),
                   onCell: () => ({ className: 'order-area-column' }),
-                  render: (_: any, field: any) => {
-                    const preview = linePreviews[field.name];
-                    if (!preview) return '-';
-                    return (
-                      <div className="price-fields-stack area-fields-stack">
-                        <div className="price-field-row">
-                          <FieldLabel>Ssx (m²)</FieldLabel>
-                          <span className="display-value area-display-value" title={`∑Ssx 1 cái: ${formatArea(preview.dienTichSx1Cai)} m²`}>
-                            {formatArea(preview.dienTichSx1Cai)}
-                          </span>
-                        </div>
-                        <div className="price-field-row">
-                          <FieldLabel>Ssx (mét tới)</FieldLabel>
-                          <span className="display-value area-display-value" title={`∑Ssx mét tới: ${formatArea(preview.dienTichSanXuatMetToi)} m`}>
-                            {formatArea(preview.dienTichSanXuatMetToi)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  },
+                  render: (_: unknown, field: LineListField) => (
+                    <AreaPreviewCell preview={linePreviews[field.name]} />
+                  ),
                 },
                 // Cột chi phí nhập tay: giá tôn, nhân công, phụ kiện
                 {
                   title: 'Chi phí (VNĐ)',
                   dataIndex: 'giaTri',
                   width: 120,
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <div className="price-fields-stack">
                       <div className="price-field-row">
                         <FieldLabel>Giá tôn</FieldLabel>
@@ -1211,7 +1244,7 @@ export default function OrderFormPage() {
                   width: 125,
                   onHeaderCell: () => ({ className: 'order-line-info-column' }),
                   onCell: () => ({ className: 'order-line-info-column' }),
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <div className="price-fields-stack line-info-fields-stack">
                       <div className="price-field-row">
                         <FieldLabel>Đơn vị tính</FieldLabel>
@@ -1242,11 +1275,11 @@ export default function OrderFormPage() {
                   align: 'left' as const,
                   onHeaderCell: () => ({ className: 'order-value-column' }),
                   onCell: () => ({ className: 'order-value-column' }),
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <LineValueCell
                       lineIndex={field.name}
                       form={form}
-                      linePreviews={linePreviews}
+                      preview={linePreviews[field.name]}
                       loaiTonById={loaiTonById}
                       withManualTonFlags={withManualTonFlags}
                     />
@@ -1257,7 +1290,7 @@ export default function OrderFormPage() {
                   title: 'Ghi chú & hình ảnh',
                   dataIndex: 'ghiChuHinhAnh',
                   width: 180,
-                  render: (_: any, field: any) => (
+                  render: (_: unknown, field: LineListField) => (
                     <LineGhiChuImageCell
                       fieldName={field.name}
                       form={form}
@@ -1274,7 +1307,7 @@ export default function OrderFormPage() {
                   align: 'center' as const,
                   onHeaderCell: () => ({ className: 'order-action-column' }),
                   onCell: () => ({ className: 'order-action-column' }),
-                  render: (_: any, field: any, index: number) => {
+                  render: (_: unknown, field: LineListField, index: number) => {
                     const items: LineFormValues[] = form.getFieldValue('lineInputs') || [];
                     const isBuffer = isSkippedTrailingLine(index, items[index], items.length);
                     const lastIsBuffer = items.length > 0
@@ -1359,7 +1392,10 @@ export default function OrderFormPage() {
                           cancelText="Hủy"
                           okButtonProps={{ danger: true }}
                           disabled={fields.length === 1}
-                          onConfirm={() => remove(field.name)}
+                          onConfirm={() => {
+                            remove(field.name);
+                            remapLinePreviewsAfterRemove(field.name);
+                          }}
                         >
                           <Button
                             type="text"
@@ -1543,6 +1579,9 @@ export default function OrderFormPage() {
                       margin-inline: auto;
                       max-width: 100%;
                       text-align: left;
+                    }
+                    .dimension-fields-switching {
+                      min-height: 64px;
                     }
                     .dimension-field-input.ant-input-number-group,
                     .dimension-field-input.ant-input-number-group-wrapper {
