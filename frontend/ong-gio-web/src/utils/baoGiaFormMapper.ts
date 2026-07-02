@@ -1,4 +1,4 @@
-import type { CalculationResult, LineFormValues, LoaiTon } from '../types';
+import type { BaoGia, CalculationResult, ChiTietBaoGia, LineFormValues, LoaiTon } from '../types';
 
 /** Hệ số quy đổi ∑Ssx (m²) sang diện tích sản xuất mét tới: mét tới = m² / 1.2 */
 export const SSX_TO_MET_TOI = 1.2;
