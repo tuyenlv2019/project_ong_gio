@@ -213,6 +213,7 @@ type DimensionFieldsCellProps = {
   form: FormInstance;
   nhomById: Map<number, NhomSanPham>;
   getDimensionFields: (nhom?: NhomSanPham) => DimensionField[];
+  onDimensionBlur?: (lineIndex: number) => void;
 };
 
 /** Ô kích thước — remount field hoãn 1 frame sau khi đổi loại SP. */
@@ -221,6 +222,7 @@ export const DimensionFieldsCell = memo(function DimensionFieldsCell({
   form,
   nhomById,
   getDimensionFields,
+  onDimensionBlur,
 }: DimensionFieldsCellProps) {
   const nhomId = Form.useWatch(['lineInputs', fieldName, 'nhomSanPhamId'], form);
   const renderedNhomId = useDeferredNhomId(nhomId);
@@ -233,7 +235,7 @@ export const DimensionFieldsCell = memo(function DimensionFieldsCell({
   }
 
   return (
-    <div className="dimension-fields-grid">
+    <div className="dimension-fields-grid" data-dimension-line={fieldName}>
       {dimensionFields.map((dimension) => {
         const name = dimension.target === 'thamSoNhap'
           ? [fieldName, 'thamSoNhap', dimension.paramKey ?? dimension.key]
@@ -255,6 +257,7 @@ export const DimensionFieldsCell = memo(function DimensionFieldsCell({
               addonBefore={dimension.label}
               controls={false}
               style={{ width: '100%' }}
+              onBlur={() => onDimensionBlur?.(fieldName)}
             />
           </Form.Item>
         );

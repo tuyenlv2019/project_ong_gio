@@ -3,6 +3,9 @@ import {
   buildLinePreviewSignature,
   getLineIndicesNeedingPreviewRefresh,
   nhomSelectionChanged,
+  patchHasDimensionChange,
+  patchHasLoaiTonChange,
+  shouldAutoSuggestThanhTienTon,
 } from './orderFormPreview';
 import type { LineFormValues } from '../types';
 
@@ -48,5 +51,29 @@ describe('orderFormPreview', () => {
       lineInputs: [sampleLine, { ...sampleLine, soLuong: 2 }],
     });
     expect(indices).toEqual([0, 1]);
+  });
+
+  it('shouldAutoSuggestThanhTienTon: dòng mới (không persisted) được gợi ý', () => {
+    const persisted = new Set([0, 1]);
+    const userEdited = new Set<number>();
+    expect(shouldAutoSuggestThanhTienTon(2, userEdited, persisted)).toBe(true);
+    expect(shouldAutoSuggestThanhTienTon(0, userEdited, persisted)).toBe(false);
+  });
+
+  it('shouldAutoSuggestThanhTienTon: chặn khi user đã sửa Giá tôn', () => {
+    const persisted = new Set<number>();
+    const userEdited = new Set([1]);
+    expect(shouldAutoSuggestThanhTienTon(1, userEdited, persisted)).toBe(false);
+  });
+
+  it('patchHasDimensionChange nhận diện đổi W/H/thamSoNhap', () => {
+    expect(patchHasDimensionChange({ w: 300 })).toBe(true);
+    expect(patchHasDimensionChange({ thamSoNhap: { L: 1 } })).toBe(true);
+    expect(patchHasDimensionChange({ loaiTonId: 2 })).toBe(false);
+  });
+
+  it('patchHasLoaiTonChange nhận diện đổi loại tôn', () => {
+    expect(patchHasLoaiTonChange({ loaiTonId: 3 })).toBe(true);
+    expect(patchHasLoaiTonChange({ w: 300 })).toBe(false);
   });
 });

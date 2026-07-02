@@ -48,11 +48,11 @@ public class NguoiDungController : ControllerBase
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Danh sách người dùng.</returns>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
-    {
-        var users = await _db.NguoiDungs.OrderBy(x => x.HoTen).ToListAsync(ct);
-        return Ok(users.Select(u => new { u.Id, u.TenDangNhap, u.HoTen, u.VaiTro, u.DangHoatDong, u.CreatedAt }));
-    }
+    public async Task<IActionResult> GetAll(CancellationToken ct) =>
+        Ok(await _db.NguoiDungs
+            .OrderBy(x => x.HoTen)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct));
 
     /// <summary>
     /// Tạo user mới.

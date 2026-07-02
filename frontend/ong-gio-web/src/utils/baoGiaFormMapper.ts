@@ -1,4 +1,4 @@
-import type { BaoGia, ChiTietBaoGia, LineFormValues } from '../types';
+import type { CalculationResult, LineFormValues, LoaiTon } from '../types';
 
 /** Hệ số quy đổi ∑Ssx (m²) sang diện tích sản xuất mét tới: mét tới = m² / 1.2 */
 export const SSX_TO_MET_TOI = 1.2;
@@ -12,6 +12,18 @@ export function dienTichSxToMetToi(dienTichSx1Cai: number): number {
  */
 export function suggestThanhTienTon(donGiaMetToi: number, metToi: number): number {
   return Math.round(donGiaMetToi * metToi);
+}
+
+/** Gợi ý Giá tôn/1 cái từ kết quả preview + đơn giá tôn (nếu có). */
+export function suggestThanhTienTonFromPreview(
+  item: Pick<LineFormValues, 'soLuong'>,
+  res: Pick<CalculationResult, 'dienTichSanXuatMetToi' | 'thanhTienTon'>,
+  ton?: Pick<LoaiTon, 'donGiaMetToi'>,
+): number {
+  if (ton) {
+    return suggestThanhTienTon(ton.donGiaMetToi, res.dienTichSanXuatMetToi);
+  }
+  return thanhTienTonTotalToPerPiece(res.thanhTienTon, Number(item.soLuong) || 1);
 }
 
 /** Suy đơn giá tôn đ/mét tới từ tiền tôn 1 cái đã nhập. */

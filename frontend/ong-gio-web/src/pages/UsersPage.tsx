@@ -2,8 +2,8 @@
  * Trang quản lý người dùng nội bộ và phân quyền.
  */
 import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createNguoiDung, deleteNguoiDung, getNguoiDungs, resetNguoiDungPassword, updateNguoiDung } from '../api';
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
@@ -26,8 +26,12 @@ function getUserSearchText(row: NguoiDung) {
   );
 }
 
+type LoadState = 'loading' | 'ready' | 'error';
+
 export default function UsersPage() {
   const [data, setData] = useState<NguoiDung[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -37,13 +41,25 @@ export default function UsersPage() {
   const [resetForm] = Form.useForm<{ matKhauMoi: string; xacNhanMatKhauMoi: string }>();
   const isAdmin = authService.isAdmin();
 
-  const reload = () => {
-    void getNguoiDungs().then(setData);
-  };
+  const reload = useCallback((silent = false) => {
+    if (!silent) {
+      setLoadState('loading');
+      setLoadError('');
+    }
+    return getNguoiDungs()
+      .then((rows) => {
+        setData(rows);
+        setLoadState('ready');
+      })
+      .catch((err: unknown) => {
+        setLoadError(getApiErrorMessage(err, 'Không tải được danh sách user'));
+        if (!silent) setLoadState('error');
+      });
+  }, []);
 
   useEffect(() => {
-    reload();
-  }, []);
+    void reload();
+  }, [reload]);
 
   const filteredData = useMemo(
     () => filterBySearch(data, search, getUserSearchText),
@@ -94,6 +110,10 @@ export default function UsersPage() {
     }
   };
 
+  if (loadState === 'loading' && data.length === 0) {
+    return <Card title="Quản lý user" loading />;
+  }
+
   return (
     <Card
       title="Quản lý user"
@@ -103,10 +123,31 @@ export default function UsersPage() {
         </Button>
       }
     >
+      {loadState === 'error' && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Không tải được danh sách user"
+          description={
+            loadError.includes('401') || loadError.includes('hết hạn')
+              ? 'Phiên đăng nhập hết hạn hoặc không hợp lệ. Vui lòng đăng xuất và đăng nhập lại bằng tài khoản ADMIN.'
+              : loadError.includes('403')
+                ? 'Chỉ tài khoản ADMIN mới xem được danh sách user.'
+                : `${loadError}. Kiểm tra kết nối API hoặc thử đăng nhập lại.`
+          }
+          action={(
+            <Button size="small" onClick={() => void reload()}>
+              Thử lại
+            </Button>
+          )}
+        />
+      )}
       <TableSearchBar value={search} onChange={setSearch} />
       <Table
         className="brand-list-table"
         rowKey="id"
+        loading={loadState === 'loading'}
         dataSource={filteredData}
         scroll={{ x: 1040 }}
         columns={[

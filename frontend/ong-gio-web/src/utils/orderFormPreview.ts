@@ -1,3 +1,4 @@
+import type { FormInstance } from 'antd';
 import type { LineFormValues } from '../types';
 
 /** Các field ảnh hưởng kết quả tính toán preview (diện tích, khối lượng...). */
@@ -13,6 +14,22 @@ export const PREVIEW_AFFECTING_LINE_FIELDS = new Set([
 export function lineNeedsPreviewRefresh(changedLinePatch?: Record<string, unknown> | null) {
   if (!changedLinePatch) return false;
   return Object.keys(changedLinePatch).some((key) => PREVIEW_AFFECTING_LINE_FIELDS.has(key));
+}
+
+/** Patch onValuesChange có đổi loại tôn. */
+export function patchHasLoaiTonChange(changedLinePatch?: Record<string, unknown> | null) {
+  if (!changedLinePatch) return false;
+  return Object.prototype.hasOwnProperty.call(changedLinePatch, 'loaiTonId');
+}
+
+/** Patch onValuesChange có đổi kích thước (W/H/thamSoNhap). */
+export function patchHasDimensionChange(changedLinePatch?: Record<string, unknown> | null) {
+  if (!changedLinePatch) return false;
+  return (
+    Object.prototype.hasOwnProperty.call(changedLinePatch, 'w')
+    || Object.prototype.hasOwnProperty.call(changedLinePatch, 'h')
+    || Object.prototype.hasOwnProperty.call(changedLinePatch, 'thamSoNhap')
+  );
 }
 
 /** Trả về index dòng cần gọi lại API preview; `all` khi không xác định được; `[]` khi không cần API. */
@@ -53,3 +70,28 @@ export function nhomSelectionChanged(changedValues: Record<string, unknown>) {
 }
 
 export const PREVIEW_DEBOUNCE_MS = 350;
+
+/** Có được tự gợi ý Giá tôn cho dòng `index` hay không. */
+export function shouldAutoSuggestThanhTienTon(
+  index: number,
+  userEdited: ReadonlySet<number>,
+  persisted: ReadonlySet<number>,
+): boolean {
+  return !userEdited.has(index) && !persisted.has(index);
+}
+
+/** Đọc đầy đủ một dòng từ form (kể cả field lồng `thamSoNhap`). */
+export function getLineFromForm(form: FormInstance, index: number): LineFormValues {
+  const base = (form.getFieldValue(['lineInputs', index]) as LineFormValues | undefined) ?? ({} as LineFormValues);
+  return {
+    ...base,
+    nhomSanPhamId: form.getFieldValue(['lineInputs', index, 'nhomSanPhamId']) ?? base.nhomSanPhamId,
+    loaiTonId: form.getFieldValue(['lineInputs', index, 'loaiTonId']) ?? base.loaiTonId,
+    w: form.getFieldValue(['lineInputs', index, 'w']) ?? base.w,
+    h: form.getFieldValue(['lineInputs', index, 'h']) ?? base.h,
+    soLuong: form.getFieldValue(['lineInputs', index, 'soLuong']) ?? base.soLuong,
+    thamSoNhap: form.getFieldValue(['lineInputs', index, 'thamSoNhap']) ?? base.thamSoNhap ?? {},
+    thanhTienTon: form.getFieldValue(['lineInputs', index, 'thanhTienTon']) ?? base.thanhTienTon,
+    thanhTienTonManual: form.getFieldValue(['lineInputs', index, 'thanhTienTonManual']) ?? base.thanhTienTonManual,
+  };
+}

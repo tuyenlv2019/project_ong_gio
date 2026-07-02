@@ -10,7 +10,7 @@
  */
 
 // --- Thư viện UI & routing ---
-import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Collapse, Form, InputNumber, Modal, Popconfirm, Popover, Row, Space, Statistic, Table, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowDownOutlined, ArrowUpOutlined, CopyOutlined, MinusCircleOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition, type Key } from 'react';
@@ -39,14 +39,19 @@ import { findDuplicateThamSo, getParamBindingKey, sortOrderedThamSoCoDinhs } fro
 import {
   mapBaoGiaToLineInputs,
   parseThamSoNhapJson,
-  suggestThanhTienTon,
+  suggestThanhTienTonFromPreview,
   thanhTienTonTotalToPerPiece,
 } from '../utils/baoGiaFormMapper';
 import {
   PREVIEW_DEBOUNCE_MS,
   buildLinePreviewSignature,
+  getLineFromForm,
   getLineIndicesNeedingPreviewRefresh,
+  lineNeedsPreviewRefresh,
   nhomSelectionChanged,
+  patchHasDimensionChange,
+  patchHasLoaiTonChange,
+  shouldAutoSuggestThanhTienTon as shouldAutoSuggestThanhTienTonForLine,
 } from '../utils/orderFormPreview';
 import {
   AreaPreviewCell,
@@ -265,9 +270,13 @@ const defaultLineValues = { donViTinh: 'cái', thueSuat: 8, thamSoNhap: {} };
  * Tạo object dòng rỗng; nếu có master data thì gán loại SP/tôn đầu tiên.
  */
 function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
+  const emptyLine = {
+    ...defaultLineValues,
+    thanhTienTonManual: false as const,
+  };
   if (nhoms?.[0] && tons?.[0]) {
     return {
-      ...defaultLineValues,
+      ...emptyLine,
       nhomSanPhamId: nhoms[0].id,
       loaiTonId: tons[0].id,
       w: 0,
@@ -277,7 +286,7 @@ function createEmptyLine(nhoms?: NhomSanPham[], tons?: LoaiTon[]) {
       phuKien: 0,
     };
   }
-  return { ...defaultLineValues };
+  return emptyLine;
 }
 
 /**
@@ -349,28 +358,83 @@ export default function OrderFormPage() {
   const [productTableStickyOffset, setProductTableStickyOffset] = useState(180);
   /** Tránh đánh dấu Giá tôn là nhập thủ công khi form tự cập nhật từ preview. */
   const isAutoUpdatingThanhTienTonRef = useRef(false);
-  /** Dòng user đã sửa Giá tôn — cập nhật đồng bộ, tránh bị preview ghi đè. */
-  const thanhTienTonManualLinesRef = useRef<Set<number>>(new Set());
+  /** Dòng user đã sửa Giá tôn hoặc đơn sửa có giá lưu — không ghi đè bằng gợi ý. */
+  const thanhTienTonUserEditedRef = useRef<Set<number>>(new Set());
+  /** Dòng đã có trong DB khi mở sửa/sao chép — không gợi ý lại trừ khi đổi kích thước. */
+  const persistedLineIndicesRef = useRef<Set<number>>(new Set());
+  /** Dòng vừa đổi kích thước — chờ blur để hỏi cập nhật Giá tôn. */
+  const dimensionChangedLinesRef = useRef<Set<number>>(new Set());
+  /** Dòng đã blur khỏi cụm kích thước — được phép hiện xác nhận Giá tôn. */
+  const blurTriggeredTonConfirmRef = useRef<Set<number>>(new Set());
+  /** Dòng vừa đổi loại tôn — cập nhật Giá tôn theo đơn giá mét tới mới. */
+  const loaiTonChangedLinesRef = useRef<Set<number>>(new Set());
+
+  const shouldAutoSuggestThanhTienTon = (index: number) =>
+    shouldAutoSuggestThanhTienTonForLine(
+      index,
+      thanhTienTonUserEditedRef.current,
+      persistedLineIndicesRef.current,
+    );
 
   const isThanhTienTonManual = (line: Partial<LineFormValues> | undefined, index: number) =>
-    Boolean(line?.thanhTienTonManual) || thanhTienTonManualLinesRef.current.has(index);
-
-  const markManualTonFromChange = (changedValues: { lineInputs?: Array<Partial<LineFormValues> | null> }) => {
-    if (isAutoUpdatingThanhTienTonRef.current) return;
-    const changedLines = changedValues?.lineInputs;
-    if (!Array.isArray(changedLines)) return;
-    changedLines.forEach((patch, index) => {
-      if (patch && Object.prototype.hasOwnProperty.call(patch, 'thanhTienTon')) {
-        thanhTienTonManualLinesRef.current.add(index);
-        form.setFieldValue(['lineInputs', index, 'thanhTienTonManual'], true);
-      }
-    });
-  };
+    thanhTienTonUserEditedRef.current.has(index) || Boolean(line?.thanhTienTonManual);
 
   const markManualTonLine = (lineIndex: number) => {
-    thanhTienTonManualLinesRef.current.add(lineIndex);
+    thanhTienTonUserEditedRef.current.add(lineIndex);
     form.setFieldValue(['lineInputs', lineIndex, 'thanhTienTonManual'], true);
   };
+
+  /** Gợi ý Giá tôn từ preview — cập nhật cả dòng Form.List để ô nhập đồng bộ. */
+  const applySuggestedThanhTienTon = useCallback((lineIndex: number, value: number) => {
+    isAutoUpdatingThanhTienTonRef.current = true;
+    internalFormUpdateRef.current = true;
+    const lines = [...((form.getFieldValue('lineInputs') as LineFormValues[] | undefined) ?? [])];
+    if (!lines[lineIndex]) return;
+    lines[lineIndex] = {
+      ...lines[lineIndex],
+      thanhTienTon: value,
+      thanhTienTonManual: false,
+    };
+    form.setFieldsValue({ lineInputs: lines });
+    queueMicrotask(() => {
+      isAutoUpdatingThanhTienTonRef.current = false;
+    });
+  }, [form]);
+
+  const confirmUpdateThanhTienTon = useCallback((
+    currentTon: number,
+    suggestedTon: number,
+    reason: 'dimension' | 'loaiTon' = 'dimension',
+  ) => new Promise<boolean>((resolve) => {
+    const reasonText = reason === 'loaiTon'
+      ? 'Loại tôn đã thay đổi'
+      : 'Kích thước đã thay đổi';
+    Modal.confirm({
+      title: 'Cập nhật Giá tôn theo công thức?',
+      content: `${reasonText}. Giá tôn gợi ý: ${formatMoney(suggestedTon)} VND (hiện tại: ${formatMoney(currentTon)} VND). Bạn có muốn cập nhật không?`,
+      okText: 'Cập nhật',
+      cancelText: 'Giữ nguyên',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  }), []);
+
+  /** Sau khi tab/blur ra khỏi cụm ô kích thước — mới hỏi cập nhật Giá tôn. */
+  const handleDimensionFieldBlur = useCallback((lineIndex: number) => {
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active?.closest(`[data-dimension-line="${lineIndex}"]`)) return;
+      if (!dimensionChangedLinesRef.current.has(lineIndex)) return;
+
+      const item = getLineFromForm(form, lineIndex);
+      const nhom = nhomById.get(Number(item.nhomSanPhamId));
+      if (!hasAllDimensions(item, nhom)) return;
+
+      blurTriggeredTonConfirmRef.current.add(lineIndex);
+      const lines = (form.getFieldValue('lineInputs') as LineFormValues[] | undefined) ?? [];
+      void refreshPreviewsRef.current({ lineInputs: lines }, undefined, [lineIndex]);
+    });
+  }, [form, nhomById]);
 
   const loaiTonOptions = useMemo(
     () => loaiTonList.map((t) => ({ value: t.id, label: `${t.thuongHieu} ${t.doDay}mm` })),
@@ -435,72 +499,111 @@ export default function OrderFormPage() {
       lineIndicesToRefresh: number[] | 'all' = 'all',
     ) => {
       const requestId = ++previewRequestIdRef.current;
-      const items = withManualTonFlags(allValues.lineInputs || []);
+      const lineCount = Math.max(
+        (form.getFieldValue('lineInputs') as LineFormValues[] | undefined)?.length ?? 0,
+        allValues.lineInputs?.length ?? 0,
+      );
       const currentNhomById = customNhomList
         ? new Map(customNhomList.map((n) => [n.id, n]))
         : nhomById;
       const indices =
         lineIndicesToRefresh === 'all'
-          ? items.map((_, index) => index)
+          ? Array.from({ length: lineCount }, (_, index) => index)
           : lineIndicesToRefresh;
 
-      isAutoUpdatingThanhTienTonRef.current = true;
       const updates: Record<number, CalculationResult> = {};
       const invalidIndices = new Set<number>();
 
-      try {
-        await Promise.all(
-          indices.map(async (index) => {
-            const item = items[index];
-            if (!item) return;
+      const offerSuggestThanhTienTon = async (index: number, item: LineFormValues, res: CalculationResult) => {
+        const ton = loaiTonById.get(Number(item.loaiTonId));
+        const suggested = suggestThanhTienTonFromPreview(item, res, ton);
+        if (!Number.isFinite(suggested)) return;
 
-            const nhom = currentNhomById.get(Number(item.nhomSanPhamId));
-            const canPreview =
-              item.nhomSanPhamId &&
-              item.loaiTonId &&
-              Number(item.soLuong) > 0 &&
-              hasAllDimensions(item, nhom);
+        const currentTon = Number(item.thanhTienTon) || 0;
+        const dimensionChanged = dimensionChangedLinesRef.current.has(index);
+        const loaiTonChanged = loaiTonChangedLinesRef.current.has(index);
 
-            if (!canPreview) {
-              invalidIndices.add(index);
-              delete previewSignatureRef.current[index];
-              return;
+        if (loaiTonChanged) {
+          loaiTonChangedLinesRef.current.delete(index);
+          if (currentTon > 0) {
+            if (suggested === currentTon) return;
+            const accepted = await confirmUpdateThanhTienTon(currentTon, suggested, 'loaiTon');
+            if (accepted) {
+              thanhTienTonUserEditedRef.current.delete(index);
+              persistedLineIndicesRef.current.delete(index);
+              applySuggestedThanhTienTon(index, suggested);
+            } else {
+              thanhTienTonUserEditedRef.current.add(index);
             }
-
-            const signature = buildLinePreviewSignature(item);
-            const cached = linePreviewsRef.current[index];
-            if (cached && previewSignatureRef.current[index] === signature) {
-              updates[index] = cached;
-              return;
-            }
-
-            try {
-              const res = await previewCalculation({
-                ...item,
-                thueSuat: (item.thueSuat ?? 0) / 100,
-              } as Parameters<typeof previewCalculation>[0]);
-              if (requestId !== previewRequestIdRef.current) return;
-
-              previewSignatureRef.current[index] = signature;
-              updates[index] = res;
-
-              const ton = loaiTonById.get(Number(item.loaiTonId));
-              if (!isThanhTienTonManual(item, index) && ton) {
-                form.setFieldValue(
-                  ['lineInputs', index, 'thanhTienTon'],
-                  suggestThanhTienTon(ton.donGiaMetToi, res.dienTichSanXuatMetToi),
-                );
-              }
-            } catch {
-              invalidIndices.add(index);
-            }
-          }),
-        );
-      } finally {
-        if (requestId === previewRequestIdRef.current) {
-          isAutoUpdatingThanhTienTonRef.current = false;
+            return;
+          }
+          applySuggestedThanhTienTon(index, suggested);
+          return;
         }
-      }
+
+        if (dimensionChanged && currentTon > 0) {
+          if (!blurTriggeredTonConfirmRef.current.has(index)) return;
+          blurTriggeredTonConfirmRef.current.delete(index);
+          dimensionChangedLinesRef.current.delete(index);
+          if (suggested === currentTon) return;
+          const accepted = await confirmUpdateThanhTienTon(currentTon, suggested, 'dimension');
+          if (accepted) {
+            thanhTienTonUserEditedRef.current.delete(index);
+            applySuggestedThanhTienTon(index, suggested);
+          } else {
+            thanhTienTonUserEditedRef.current.add(index);
+          }
+          return;
+        }
+
+        if (!shouldAutoSuggestThanhTienTon(index)) return;
+        if (currentTon > 0 && currentTon === suggested) return;
+        applySuggestedThanhTienTon(index, suggested);
+        if (dimensionChanged) {
+          dimensionChangedLinesRef.current.delete(index);
+        }
+      };
+
+      await Promise.all(
+        indices.map(async (index) => {
+          const item = getLineFromForm(form, index);
+
+          const nhom = currentNhomById.get(Number(item.nhomSanPhamId));
+          const canPreview =
+            item.nhomSanPhamId &&
+            item.loaiTonId &&
+            Number(item.soLuong) > 0 &&
+            hasAllDimensions(item, nhom);
+
+          if (!canPreview) {
+            invalidIndices.add(index);
+            delete previewSignatureRef.current[index];
+            return;
+          }
+
+          const signature = buildLinePreviewSignature(item);
+          const cached = linePreviewsRef.current[index];
+          if (cached && previewSignatureRef.current[index] === signature) {
+            updates[index] = cached;
+            await offerSuggestThanhTienTon(index, item, cached);
+            return;
+          }
+
+          try {
+            const res = await previewCalculation({
+              ...item,
+              thueSuat: (item.thueSuat ?? 0) / 100,
+            } as Parameters<typeof previewCalculation>[0]);
+            if (requestId !== previewRequestIdRef.current) return;
+
+            previewSignatureRef.current[index] = signature;
+            updates[index] = res;
+            await offerSuggestThanhTienTon(index, item, res);
+          } catch {
+            invalidIndices.add(index);
+          }
+        }),
+      );
 
       if (requestId !== previewRequestIdRef.current) {
         return linePreviewsRef.current;
@@ -517,7 +620,7 @@ export default function OrderFormPage() {
 
       return { ...linePreviewsRef.current, ...updates };
     },
-    [form, loaiTonById, nhomById, withManualTonFlags],
+    [applySuggestedThanhTienTon, confirmUpdateThanhTienTon, form, loaiTonById, nhomById],
   );
 
   useEffect(() => {
@@ -557,6 +660,12 @@ export default function OrderFormPage() {
               trangThai: bg.trangThai || 'CHUA_XU_LY',
               lineInputs,
             });
+            initialLines.forEach((line, index) => {
+              persistedLineIndicesRef.current.add(index);
+              if (line.thanhTienTonManual) {
+                thanhTienTonUserEditedRef.current.add(index);
+              }
+            });
             if (initialLines.length > 0) {
               await refreshPreviewsRef.current({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
               if (!active) return;
@@ -581,6 +690,9 @@ export default function OrderFormPage() {
               tenKhachHang: '',
               trangThai: 'CHUA_XU_LY',
               lineInputs,
+            });
+            initialLines.forEach((_, index) => {
+              persistedLineIndicesRef.current.add(index);
             });
             if (initialLines.length > 0) {
               await refreshPreviewsRef.current({ lineInputs: lineInputs as LineFormValues[] }, nhoms);
@@ -661,8 +773,28 @@ export default function OrderFormPage() {
       });
       return next;
     });
-    thanhTienTonManualLinesRef.current = remapIndexSetAfterMove(
-      thanhTienTonManualLinesRef.current,
+    thanhTienTonUserEditedRef.current = remapIndexSetAfterMove(
+      thanhTienTonUserEditedRef.current,
+      fromIndex,
+      toIndex,
+    );
+    persistedLineIndicesRef.current = remapIndexSetAfterMove(
+      persistedLineIndicesRef.current,
+      fromIndex,
+      toIndex,
+    );
+    dimensionChangedLinesRef.current = remapIndexSetAfterMove(
+      dimensionChangedLinesRef.current,
+      fromIndex,
+      toIndex,
+    );
+    blurTriggeredTonConfirmRef.current = remapIndexSetAfterMove(
+      blurTriggeredTonConfirmRef.current,
+      fromIndex,
+      toIndex,
+    );
+    loaiTonChangedLinesRef.current = remapIndexSetAfterMove(
+      loaiTonChangedLinesRef.current,
       fromIndex,
       toIndex,
     );
@@ -685,8 +817,24 @@ export default function OrderFormPage() {
       });
       return next;
     });
-    thanhTienTonManualLinesRef.current = remapIndexSetAfterRemove(
-      thanhTienTonManualLinesRef.current,
+    thanhTienTonUserEditedRef.current = remapIndexSetAfterRemove(
+      thanhTienTonUserEditedRef.current,
+      removedIndex,
+    );
+    persistedLineIndicesRef.current = remapIndexSetAfterRemove(
+      persistedLineIndicesRef.current,
+      removedIndex,
+    );
+    dimensionChangedLinesRef.current = remapIndexSetAfterRemove(
+      dimensionChangedLinesRef.current,
+      removedIndex,
+    );
+    blurTriggeredTonConfirmRef.current = remapIndexSetAfterRemove(
+      blurTriggeredTonConfirmRef.current,
+      removedIndex,
+    );
+    loaiTonChangedLinesRef.current = remapIndexSetAfterRemove(
+      loaiTonChangedLinesRef.current,
       removedIndex,
     );
     previewSignatureRef.current = remapRecordKeysAfterRemove(
@@ -784,6 +932,7 @@ export default function OrderFormPage() {
     const preview = previews[lineIndex];
     if (preview && historyTonTotal > 0) {
       isAutoUpdatingThanhTienTonRef.current = true;
+      internalFormUpdateRef.current = true;
       form.setFieldValue(['lineInputs', lineIndex, 'thanhTienTon'], thanhTienTonTotalToPerPiece(historyTonTotal, item.soLuong));
       markManualTonLine(lineIndex);
       isAutoUpdatingThanhTienTonRef.current = false;
@@ -842,8 +991,20 @@ export default function OrderFormPage() {
     const changedLines = changedValues.lineInputs as Array<Record<string, unknown> | null> | undefined;
     if (Array.isArray(changedLines)) {
       const fieldsToSet: { name: (string | number)[]; value: unknown }[] = [];
+      const manualResetFields: { name: (string | number)[]; value: unknown }[] = [];
       const previewClears: number[] = [];
       changedLines.forEach((patch, index) => {
+        if (patch && patchHasDimensionChange(patch)) {
+          dimensionChangedLinesRef.current.add(index);
+        }
+        if (patch && patchHasLoaiTonChange(patch)) {
+          loaiTonChangedLinesRef.current.add(index);
+          persistedLineIndicesRef.current.delete(index);
+        }
+        if (patch && lineNeedsPreviewRefresh(patch) && !thanhTienTonUserEditedRef.current.has(index)) {
+          persistedLineIndicesRef.current.delete(index);
+          manualResetFields.push({ name: ['lineInputs', index, 'thanhTienTonManual'], value: false });
+        }
         if (patch && Object.prototype.hasOwnProperty.call(patch, 'nhomSanPhamId')) {
           fieldsToSet.push(
             { name: ['lineInputs', index, 'w'], value: undefined },
@@ -873,9 +1034,11 @@ export default function OrderFormPage() {
         internalFormUpdateRef.current = true;
         form.setFields(fieldsToSet);
       }
+      if (manualResetFields.length > 0) {
+        internalFormUpdateRef.current = true;
+        form.setFields(manualResetFields);
+      }
     }
-
-    markManualTonFromChange(changedValues);
 
     const items = allValues.lineInputs || [];
     const indices = getLineIndicesNeedingPreviewRefresh(changedValues);
@@ -903,7 +1066,7 @@ export default function OrderFormPage() {
 
     pendingPreviewValuesRef.current = {
       ...allValues,
-      lineInputs: withManualTonFlags(items),
+      lineInputs: items,
     };
 
     if (indices === 'all') {
@@ -923,9 +1086,14 @@ export default function OrderFormPage() {
       pendingPreviewValuesRef.current = null;
       pendingPreviewIndicesRef.current = [];
       if (!payload) return;
-      void refreshPreviews(payload, undefined, refreshIndices).then(() => {
-        ensureNewRowIfNeeded(payload);
-        scheduleValidationUpdate(payload.lineInputs || []);
+      const liveLines = form.getFieldValue('lineInputs') as LineFormValues[] | undefined;
+      const mergedPayload = {
+        ...payload,
+        lineInputs: liveLines ?? payload.lineInputs,
+      };
+      void refreshPreviews(mergedPayload, undefined, refreshIndices).then(() => {
+        ensureNewRowIfNeeded(mergedPayload);
+        scheduleValidationUpdate(mergedPayload.lineInputs || []);
       });
     }, PREVIEW_DEBOUNCE_MS);
   };
@@ -1153,6 +1321,7 @@ export default function OrderFormPage() {
                       form={form}
                       nhomById={nhomById}
                       getDimensionFields={getDimensionFields}
+                      onDimensionBlur={handleDimensionFieldBlur}
                     />
                   ),
                 },
@@ -1206,10 +1375,9 @@ export default function OrderFormPage() {
                             style={{ width: '100%' }}
                             tooltip="Tiền tôn cho 1 cái (có thể sửa). Gợi ý tự động khi đổi loại tôn/kích thước nếu chưa nhập tay"
                             {...moneyInputNumberProps}
-                            onChange={() => {
-                              if (!isAutoUpdatingThanhTienTonRef.current) {
-                                markManualTonLine(field.name);
-                              }
+                            onChange={(value) => {
+                              if (isAutoUpdatingThanhTienTonRef.current || value == null) return;
+                              markManualTonLine(field.name);
                             }}
                           />
                         </Form.Item>
