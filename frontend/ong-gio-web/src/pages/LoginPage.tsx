@@ -6,6 +6,7 @@ import { LockOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../authService';
+import SiteFooter from '../components/SiteFooter';
 import { getApiErrorMessage } from '../utils/apiError';
 import './LoginPage.css';
 
@@ -74,6 +75,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
+      <div className="login-page-main">
       <Card className="login-card" bordered={false}>
         <div className="login-logo-wrap">
           <img src="/logo-cty.png" alt="THUAN PHONG M&E Co.Ltd" className="login-logo" />
@@ -158,6 +160,8 @@ export default function LoginPage() {
           </Form>
         </Spin>
       </Card>
+      </div>
+      <SiteFooter variant="login" />
     </div>
   );
 }

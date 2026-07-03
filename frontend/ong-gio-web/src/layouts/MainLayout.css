@@ -4,11 +4,31 @@
   top: 0;
   bottom: 0;
   height: 100vh;
+  overflow: hidden;
+  z-index: 200;
+  background: linear-gradient(180deg, #003d82 0%, #0056b3 55%, #0068c9 100%) !important;
+  background: var(--brand-sidebar-bg, var(--brand-table-header-bg)) !important;
+  box-shadow: 2px 0 12px rgba(0, 61, 130, 0.25);
+}
+
+.brand-sider .ant-layout-sider-children {
+  height: 100%;
+  background: inherit;
+}
+
+.brand-sider-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100vh;
+  background: inherit;
+}
+
+.brand-sider-main {
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  z-index: 200;
-  background: var(--brand-table-header-bg) !important;
-  box-shadow: 2px 0 12px rgba(0, 61, 130, 0.25);
 }
 
 .app-layout-root {

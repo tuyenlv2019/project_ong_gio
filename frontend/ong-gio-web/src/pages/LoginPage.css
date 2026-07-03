@@ -1,9 +1,15 @@
 .login-page {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
   min-height: 100vh;
   background: linear-gradient(135deg, #003d82 0%, #0056b3 45%, #0068c9 100%);
+}
+
+.login-page-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   padding: 24px;
 }
 

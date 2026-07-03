@@ -16,6 +16,7 @@ import { Layout, Menu, Typography, Button, Space, Dropdown } from 'antd';
 import { useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import SiteFooter from '../components/SiteFooter';
 import { authService } from '../authService';
 import './MainLayout.css';
 
@@ -111,18 +112,23 @@ export default function MainLayout() {
           }
         }}
       >
-        <div className="brand-logo-wrap">
-          <img src="/logo-cty.png" alt="THUAN PHONG M&E Co.Ltd" className="brand-logo" />
+        <div className="brand-sider-shell">
+          <div className="brand-sider-main">
+            <div className="brand-logo-wrap">
+              <img src="/logo-cty.png" alt="THUAN PHONG M&E Co.Ltd" className="brand-logo" />
+            </div>
+            <Menu
+              theme="dark"
+              mode="inline"
+              inlineCollapsed={collapsed}
+              className="brand-sidebar-menu"
+              selectedKeys={[location.pathname === '/' ? '/' : location.pathname]}
+              items={menuItems}
+              onClick={({ key }) => navigate(key)}
+            />
+          </div>
+          <SiteFooter variant="sidebar" />
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          inlineCollapsed={collapsed}
-          className="brand-sidebar-menu"
-          selectedKeys={[location.pathname === '/' ? '/' : location.pathname]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
       </Sider>
       <Layout className={`layout-with-sider${collapsed ? ' is-collapsed' : ''}`}>
         <Header className="brand-header">
