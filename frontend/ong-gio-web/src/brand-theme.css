@@ -1,0 +1,10 @@
+/* Biến màu thương hiệu — tách riêng để tránh mất theme khi HMR index.css lỗi. */
+:root {
+  --brand-blue-dark: #003d82;
+  --brand-blue: #0056b3;
+  --brand-blue-light: #0068c9;
+  --brand-accent: #00c2ff;
+  --brand-accent-light: #00e5ff;
+  --brand-sidebar-bg: linear-gradient(180deg, #003d82 0%, #0056b3 55%, #0068c9 100%);
+  --brand-table-header-bg: var(--brand-sidebar-bg);
+}
