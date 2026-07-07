@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace OngGio.Api.Controllers;
@@ -13,6 +14,7 @@ public class HealthController : ControllerBase
     /// Trả về trạng thái health đơn giản cho hệ thống giám sát.
     /// </summary>
     /// <returns>JSON chứa trạng thái service.</returns>
+    [AllowAnonymous]
     [HttpGet]
     public IActionResult Get() => Ok(new { status = "ok", service = "OngGio.Api" });
 }

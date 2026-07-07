@@ -29,6 +29,7 @@ public class AuthController : ControllerBase
     /// </summary>
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Token captcha và ảnh base64 của captcha.</returns>
+    [AllowAnonymous]
     [HttpGet("captcha")]
     public async Task<IActionResult> GetCaptcha(CancellationToken ct)
     {
@@ -42,6 +43,7 @@ public class AuthController : ControllerBase
     /// <param name="request">Dữ liệu đăng nhập từ client.</param>
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Token đăng nhập và thông tin user nếu thành công.</returns>
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
