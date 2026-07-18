@@ -1,7 +1,7 @@
 /**
  * Trang danh sách báo giá, hỗ trợ sửa, xóa, đổi trạng thái và export.
  */
-import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Popconfirm, Select, Space, Table, Tooltip, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,8 +9,8 @@ import TableSearchBar from '../components/TableSearchBar';
 import {
   TRANG_THAI_DON,
   deleteBaoGia,
+  downloadBaoGiaExcel,
   formatMoney,
-  getBaoGiaExportUrl,
   getBaoGias,
   updateBaoGiaStatus,
 } from '../api';
@@ -83,10 +83,17 @@ export default function OrdersPage() {
     [data, search],
   );
 
+  const isCompleted = (trangThai?: string) => trangThai === 'HOAN_THANH';
+
   const onDelete = async (id: number) => {
-    await deleteBaoGia(id);
-    message.success('Đã xóa đơn hàng');
-    reload();
+    try {
+      await deleteBaoGia(id);
+      message.success('Đã xóa đơn hàng');
+      reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      message.error(msg || 'Xóa thất bại');
+    }
   };
 
   const onStatusChange = async (id: number, trangThai: string) => {
@@ -95,8 +102,13 @@ export default function OrdersPage() {
     reload();
   };
 
-  const onExportExcel = (row: BaoGia) => {
-    window.open(getBaoGiaExportUrl(row.id), '_blank');
+  const onExportExcel = async (row: BaoGia) => {
+    try {
+      await downloadBaoGiaExcel(row.id, row.maBaoGia);
+      message.success('Đã tải file Excel');
+    } catch {
+      message.error('Không xuất được file Excel. Vui lòng thử lại.');
+    }
   };
 
   return (
@@ -153,11 +165,18 @@ export default function OrdersPage() {
           }),
           {
             title: 'Thao tác',
-            width: 130,
-            render: (_, row) => (
-              <Space>
-                <Tooltip title="Sửa">
-                  <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/don-hang/${row.id}`)} />
+            width: 160,
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+            render: (_, row) => {
+              const completed = isCompleted(row.trangThai);
+              return (
+              <Space size={4} wrap={false}>
+                <Tooltip title={completed ? 'Xem (đã hoàn thành)' : 'Sửa'}>
+                  <Button
+                    size="small"
+                    icon={completed ? <EyeOutlined /> : <EditOutlined />}
+                    onClick={() => navigate(`/don-hang/${row.id}`)}
+                  />
                 </Tooltip>
                 <Tooltip title="Sao chép đơn">
                   <Button
@@ -181,11 +200,18 @@ export default function OrdersPage() {
                     <Button size="small" icon={<DownloadOutlined />} />
                   </Popconfirm>
                 </Tooltip>
-                <Popconfirm title="Xóa đơn hàng?" onConfirm={() => onDelete(row.id)}>
-                  <Button size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                <Tooltip title={completed ? 'Đơn hoàn thành — không xóa được' : 'Xóa'}>
+                  <Popconfirm
+                    title="Xóa đơn hàng?"
+                    onConfirm={() => onDelete(row.id)}
+                    disabled={completed}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} disabled={completed} />
+                  </Popconfirm>
+                </Tooltip>
               </Space>
-            ),
+              );
+            },
           },
         ]}
       />

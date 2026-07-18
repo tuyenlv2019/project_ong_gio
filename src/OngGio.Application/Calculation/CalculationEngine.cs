@@ -38,6 +38,9 @@ public class CalculationEngine : ICalculationEngine
         }
 
         var thamSo = BuildInputParameters(request);
+        if (PhanManhRule.AppliesTo(thamSoList))
+            thamSo[PhanManhRule.ParameterName] = PhanManhRule.Calculate(request.W, request.H);
+
         var ssx1Cai = _dbFormulaEvaluator.Evaluate(nhomSanPham.CongThucDienTich, thamSo);
         const string trangThaiCongThuc = "XAC_NHAN";
 
@@ -78,8 +81,10 @@ public class CalculationEngine : ICalculationEngine
         {
             ["W"] = request.W,
             ["w"] = request.W,
+            ["W1"] = request.W,
             ["H"] = request.H,
             ["h"] = request.H,
+            ["H1"] = request.H,
             ["Wmax"] = request.W,
             ["Hmax"] = request.H,
         };
@@ -89,6 +94,16 @@ public class CalculationEngine : ICalculationEngine
             foreach (var item in request.ThamSoNhap)
                 thamSo[item.Key] = item.Value;
         }
+
+        // Alias thương mại: N (độ lệch) ↔ DO_LECH; Wp (nhánh Tê) ↔ W2
+        if (thamSo.TryGetValue("DO_LECH", out var doLech) && !thamSo.ContainsKey("N"))
+            thamSo["N"] = doLech;
+        if (thamSo.TryGetValue("N", out var n) && !thamSo.ContainsKey("DO_LECH"))
+            thamSo["DO_LECH"] = n;
+        if (thamSo.TryGetValue("Wp", out var wp) && !thamSo.ContainsKey("W2"))
+            thamSo["W2"] = wp;
+        if (thamSo.TryGetValue("W2", out var w2) && !thamSo.ContainsKey("Wp"))
+            thamSo["Wp"] = w2;
 
         return thamSo;
     }

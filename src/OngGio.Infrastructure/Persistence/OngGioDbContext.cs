@@ -39,6 +39,7 @@ public class OngGioDbContext : DbContext
             e.Property(x => x.TenNhom).HasMaxLength(200).IsRequired();
             e.Property(x => x.HinhAnhMinhHoa);
             e.Property(x => x.CongThucDienTich);
+            e.Property(x => x.MauTenSanPham).HasMaxLength(300);
         });
 
         modelBuilder.Entity<ThamSoCoDinh>(e =>
@@ -55,7 +56,11 @@ public class OngGioDbContext : DbContext
             e.ToTable("loai_ton");
             e.HasKey(x => x.Id);
             e.Property(x => x.ThuongHieu).HasMaxLength(200).IsRequired();
+            e.Property(x => x.DoMaVatLieu).HasMaxLength(100).IsRequired();
             e.Property(x => x.KgMoiMetToi).HasDefaultValue(4.5m);
+            e.HasIndex(x => new { x.ThuongHieu, x.DoDay, x.DoMaVatLieu })
+                .IsUnique()
+                .HasDatabaseName("IX_loai_ton_ThuongHieu_DoDay_DoMaVatLieu");
         });
 
         modelBuilder.Entity<BaoGia>(e =>

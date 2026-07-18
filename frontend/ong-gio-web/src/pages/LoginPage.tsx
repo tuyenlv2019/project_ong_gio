@@ -18,6 +18,12 @@ export default function LoginPage() {
   const [captchaLoading, setCaptchaLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Bỏ khỏi thứ tự Tab: nút hiện/ẩn mật khẩu → Tab từ mật khẩu nhảy thẳng sang captcha.
+  useEffect(() => {
+    const icon = document.querySelector<HTMLElement>('.login-card .ant-input-password-icon');
+    if (icon) icon.tabIndex = -1;
+  });
+
   const loadCaptcha = useCallback(async () => {
     setCaptchaLoading(true);
     try {
@@ -112,8 +118,8 @@ export default function LoginPage() {
                 { min: 6, message: 'Mật khẩu ít nhất 6 ký tự' }
               ]}
             >
-              <Input.Password 
-                prefix={<LockOutlined />} 
+              <Input.Password
+                prefix={<LockOutlined />}
                 placeholder="Mật khẩu"
               />
             </Form.Item>
@@ -122,7 +128,13 @@ export default function LoginPage() {
               label={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Captcha</span>
-                  <Button type="link" size="small" icon={<ReloadOutlined />} onClick={loadCaptcha}>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={loadCaptcha}
+                    tabIndex={-1}
+                  >
                     Làm mới
                   </Button>
                 </div>

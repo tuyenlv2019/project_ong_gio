@@ -211,10 +211,12 @@ namespace OngGio.Infrastructure.Migrations
                     b.Property<decimal>("DoDay")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal>("DonGiaMetToi")
-                        .HasColumnType("numeric");
+                    b.Property<string>("DoMaVatLieu")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
-                    b.Property<decimal>("GiaSanCoDinh")
+                    b.Property<decimal>("DonGiaMetToi")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("KgMoiMetToi")
@@ -237,6 +239,10 @@ namespace OngGio.Infrastructure.Migrations
                         .HasColumnName("updated_by");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ThuongHieu", "DoDay", "DoMaVatLieu")
+                        .IsUnique()
+                        .HasDatabaseName("IX_loai_ton_ThuongHieu_DoDay_DoMaVatLieu");
 
                     b.ToTable("loai_ton", (string)null);
                 });
@@ -320,6 +326,10 @@ namespace OngGio.Infrastructure.Migrations
 
                     b.Property<string>("HinhAnhMinhHoa")
                         .HasColumnType("text");
+
+                    b.Property<string>("MauTenSanPham")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("TenNhom")
                         .IsRequired()

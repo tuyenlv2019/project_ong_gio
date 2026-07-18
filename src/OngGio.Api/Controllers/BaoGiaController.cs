@@ -117,8 +117,15 @@ public class BaoGiaController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var ok = await _baoGiaService.DeleteAsync(id, ct);
-        return ok ? NoContent() : NotFound();
+        try
+        {
+            var ok = await _baoGiaService.DeleteAsync(id, ct);
+            return ok ? NoContent() : NotFound();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -132,7 +139,9 @@ public class BaoGiaController : ControllerBase
     {
         try
         {
-            var bytes = await _baoGiaService.ExportExcelAsync(id, ct);
+            var nguoiGui = User.FindFirst("hoTen")?.Value
+                ?? User.Identity?.Name;
+            var bytes = await _baoGiaService.ExportExcelAsync(id, nguoiGui, ct);
             var baoGia = await _baoGiaService.GetByIdAsync(id, ct);
             var fileName = baoGia?.MaBaoGia ?? $"BaoGia_{id}";
             return File(bytes,
@@ -142,6 +151,13 @@ public class BaoGiaController : ControllerBase
         catch (KeyNotFoundException)
         {
             return NotFound();
+        }
+        catch (Exception ex)
+        {
+            return Problem(
+                detail: ex.Message,
+                title: "Xuất Excel thất bại",
+                statusCode: StatusCodes.Status500InternalServerError);
         }
     }
 }

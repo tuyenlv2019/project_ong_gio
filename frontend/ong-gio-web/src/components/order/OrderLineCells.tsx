@@ -1,6 +1,6 @@
 import { Form } from 'antd';
 import type { FormInstance } from 'antd';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { formatMoney } from '../../api';
 import type { CalculationResult, LineFormValues, LoaiTon, NhomSanPham } from '../../types';
 import { computeOrderTotals, calcLinePricing, EMPTY_ORDER_TOTALS } from '../../utils/orderFormPricing';
@@ -9,8 +9,11 @@ import HintInput from '../HintInput';
 import HintInputNumber from '../HintInputNumber';
 import HintSelect from '../HintSelect';
 import { resolveMasterImageUrl } from '../../utils/imageUrl';
+import { computePhanManh, isPhanManhParameter } from '../../utils/phanManh';
 
 const TOTALS_DEBOUNCE_MS = 120;
+/** Chờ focus ổn định khi Tab giữa các ô KT trước khi coi là đã rời cụm. */
+const DIMENSION_LEAVE_MS = 120;
 
 function FieldLabel({ children }: { children: string }) {
   return <EllipsisText className="price-field-label">{children}</EllipsisText>;
@@ -213,33 +216,78 @@ type DimensionFieldsCellProps = {
   form: FormInstance;
   nhomById: Map<number, NhomSanPham>;
   getDimensionFields: (nhom?: NhomSanPham) => DimensionField[];
-  onDimensionBlur?: (lineIndex: number) => void;
+  /** Gọi khi focus rời cả cụm Kích thước (Tab sang cột khác). */
+  onDimensionGroupLeave?: (lineIndex: number) => void;
 };
 
-/** Ô kích thước — remount field hoãn 1 frame sau khi đổi loại SP. */
+/** Ô kích thước — báo khi Tab/focus rời cả cụm (không phải từng ô). */
 export const DimensionFieldsCell = memo(function DimensionFieldsCell({
   fieldName,
   form,
   nhomById,
   getDimensionFields,
-  onDimensionBlur,
+  onDimensionGroupLeave,
 }: DimensionFieldsCellProps) {
   const nhomId = Form.useWatch(['lineInputs', fieldName, 'nhomSanPhamId'], form);
   const renderedNhomId = useDeferredNhomId(nhomId);
   const nhom = nhomById.get(Number(renderedNhomId));
   const dimensionFields = getDimensionFields(nhom);
+  const w = Form.useWatch(['lineInputs', fieldName, 'w'], form);
+  const h = Form.useWatch(['lineInputs', fieldName, 'h'], form);
+  const phanManhField = dimensionFields.find((dimension) => isPhanManhParameter(dimension.key));
+  const phanManhParamKey = phanManhField?.paramKey ?? phanManhField?.key;
   const isSwitching = nhomId !== renderedNhomId;
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    if (!phanManhParamKey || isSwitching) return;
+
+    const fieldPath = ['lineInputs', fieldName, 'thamSoNhap', phanManhParamKey];
+    const value = computePhanManh(w, h);
+    if (form.getFieldValue(fieldPath) !== value)
+      form.setFieldValue(fieldPath, value);
+  }, [fieldName, form, h, isSwitching, phanManhParamKey, w]);
+
+  useEffect(() => () => {
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+  }, []);
+
+  /** React bubble onBlur (= focusout): chỉ coi là rời cụm khi relatedTarget ngoài grid. */
+  const handleGroupBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    const next = event.relatedTarget as Node | null;
+    if (next && container.contains(next)) return;
+
+    if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    leaveTimerRef.current = setTimeout(() => {
+      if (container.contains(document.activeElement)) return;
+      onDimensionGroupLeave?.(fieldName);
+    }, DIMENSION_LEAVE_MS);
+  };
+
+  const handleGroupFocus = () => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = undefined;
+    }
+  };
 
   if (isSwitching) {
     return <div className="dimension-fields-grid dimension-fields-switching" aria-busy="true" />;
   }
 
   return (
-    <div className="dimension-fields-grid" data-dimension-line={fieldName}>
+    <div
+      className="dimension-fields-grid"
+      data-dimension-line={fieldName}
+      onBlur={handleGroupBlur}
+      onFocus={handleGroupFocus}
+    >
       {dimensionFields.map((dimension) => {
         const name = dimension.target === 'thamSoNhap'
           ? [fieldName, 'thamSoNhap', dimension.paramKey ?? dimension.key]
           : [fieldName, dimension.target];
+        const isPhanManh = isPhanManhParameter(dimension.key);
 
         return (
           <Form.Item
@@ -250,14 +298,14 @@ export const DimensionFieldsCell = memo(function DimensionFieldsCell({
           >
             <HintInputNumber
               className="dimension-field-input"
-              min={dimension.key === 'phan_manh' ? 1 : 0}
-              step={dimension.key === 'phan_manh' ? 1 : 10}
+              min={isPhanManh ? 1 : 0}
+              step={isPhanManh ? 1 : 10}
               placeholder={dimension.label}
-              tooltip={dimension.label}
+              tooltip={isPhanManh ? `${dimension.label}: tự tính theo W và H` : dimension.label}
               addonBefore={dimension.label}
               controls={false}
+              readOnly={isPhanManh}
               style={{ width: '100%' }}
-              onBlur={() => onDimensionBlur?.(fieldName)}
             />
           </Form.Item>
         );

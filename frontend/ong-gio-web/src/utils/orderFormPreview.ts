@@ -32,6 +32,15 @@ export function patchHasDimensionChange(changedLinePatch?: Record<string, unknow
   );
 }
 
+const DIMENSION_ONLY_FIELDS = new Set(['w', 'h', 'thamSoNhap']);
+
+/** Patch chỉ đổi kích thước — preview ∑Ssx/giá chờ Tab ra khỏi cụm KT, không debounce khi đang gõ. */
+export function patchIsDimensionOnlyChange(changedLinePatch?: Record<string, unknown> | null) {
+  if (!changedLinePatch) return false;
+  const keys = Object.keys(changedLinePatch);
+  return keys.length > 0 && keys.every((key) => DIMENSION_ONLY_FIELDS.has(key));
+}
+
 /** Trả về index dòng cần gọi lại API preview; `all` khi không xác định được; `[]` khi không cần API. */
 export function getLineIndicesNeedingPreviewRefresh(
   changedValues: Record<string, unknown>,
@@ -42,6 +51,8 @@ export function getLineIndicesNeedingPreviewRefresh(
   }
   const indices: number[] = [];
   changedLines.forEach((patch, index) => {
+    // Đổi KT: không preview tại đây — finalize khi rời cụm Kích thước.
+    if (patchIsDimensionOnlyChange(patch)) return;
     if (lineNeedsPreviewRefresh(patch ?? undefined)) {
       indices.push(index);
     }

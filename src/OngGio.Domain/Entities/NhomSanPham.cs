@@ -10,6 +10,10 @@ public class NhomSanPham : AuditableEntity
     public string? HinhAnhMinhHoa { get; set; }
     /// <summary>Mô tả công thức tính diện tích sản xuất ∑Ssx (m²).</summary>
     public string? CongThucDienTich { get; set; }
+    /// <summary>
+    /// Mẫu tên sản phẩm mặc định trên form đơn — dùng placeholder {TenNhom}, {W}, {H}, {L}...
+    /// </summary>
+    public string? MauTenSanPham { get; set; }
 
     public ICollection<ThamSoCoDinh> ThamSoCoDinhs { get; set; } = [];
     public ICollection<ChiTietBaoGia> ChiTietBaoGias { get; set; } = [];

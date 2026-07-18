@@ -16,6 +16,8 @@ export interface NhomSanPham {
   tenNhom: string;
   hinhAnhMinhHoa?: string;
   congThucDienTich?: string;
+  /** Mẫu tên SP mặc định trên form đơn — placeholder {TenNhom}, {W}, {H}, {L}... */
+  mauTenSanPham?: string;
   thamSoCoDinhs: ThamSoCoDinh[];
   createdAt?: string;
   createdBy?: string;
@@ -27,6 +29,8 @@ export interface LoaiTon {
   id: number;
   thuongHieu: string;
   doDay: number;
+  /** Độ mạ vật liệu (nhập tay, bắt buộc) */
+  doMaVatLieu: string;
   donGiaMetToi: number;
   kgMoiMetToi: number;
   createdAt?: string;

@@ -1,5 +1,4 @@
 // File khởi động của API: cấu hình DI, JWT, CORS, Swagger và seed dữ liệu.
-using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -19,7 +18,18 @@ builder.Services.AddInfrastructure(connectionString);
 
 // Add JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!);
+var secretKeyText = jwtSettings["SecretKey"];
+if (string.IsNullOrWhiteSpace(secretKeyText)
+    || secretKeyText.Length < 32
+    || secretKeyText.Contains("your-super-secret-key", StringComparison.OrdinalIgnoreCase)
+    || secretKeyText.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey chưa được cấu hình an toàn (tối thiểu 32 ký tự). "
+        + "Đặt qua biến môi trường JwtSettings__SecretKey hoặc appsettings.Development.json.");
+}
+
+var secretKey = Encoding.UTF8.GetBytes(secretKeyText);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -61,21 +71,40 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.SetIsOriginAllowed(_ => true)
+    {
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? [];
+
+        if (builder.Environment.IsDevelopment()
+            || builder.Environment.IsEnvironment("Testing")
+            || origins.Length == 0)
+        {
+            // Dev/Testing: cho phép mọi origin để Vite proxy hoạt động.
+            policy.SetIsOriginAllowed(_ => true)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+            return;
+        }
+
+        policy.WithOrigins(origins)
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod();
+    });
 });
 
 var app = builder.Build();
 
-try
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    await OngGio.Infrastructure.DependencyInjection.SeedDataAsync(app.Services);
-}
-catch (Exception ex)
-{
-    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-    logger.LogError(ex, "Không thể kết nối PostgreSQL. Kiểm tra ConnectionStrings:DefaultConnection trong appsettings.json");
+    try
+    {
+        await OngGio.Infrastructure.DependencyInjection.SeedDataAsync(app.Services);
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        logger.LogError(ex, "Không thể kết nối PostgreSQL. Kiểm tra ConnectionStrings:DefaultConnection / biến môi trường.");
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -86,7 +115,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("Frontend");
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseDefaultFiles();
 }
@@ -96,9 +125,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.MapFallbackToFile("index.html");
 }
 
 app.Run();
+
+public partial class Program;

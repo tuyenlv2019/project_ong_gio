@@ -40,6 +40,8 @@ public class CalculationEngineTests
 
         DoDay = 0.58m,
 
+        DoMaVatLieu = "Z120",
+
         DonGiaMetToi = 222_000m,
 
         KgMoiMetToi = 4.5m

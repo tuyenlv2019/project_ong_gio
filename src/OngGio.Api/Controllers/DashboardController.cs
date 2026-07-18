@@ -63,10 +63,20 @@ public class NguoiDungController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] NguoiDungRequest request, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.TenDangNhap) || string.IsNullOrWhiteSpace(request.HoTen))
+            return BadRequest(new { message = "Tên đăng nhập và họ tên là bắt buộc" });
+
+        if (string.IsNullOrWhiteSpace(request.MatKhau) || request.MatKhau.Length < 6)
+            return BadRequest(new { message = "Mật khẩu phải có ít nhất 6 ký tự" });
+
+        var exists = await _db.NguoiDungs.AnyAsync(x => x.TenDangNhap == request.TenDangNhap, ct);
+        if (exists)
+            return BadRequest(new { message = "Tên đăng nhập đã tồn tại" });
+
         var user = new NguoiDung
         {
-            TenDangNhap = request.TenDangNhap,
-            HoTen = request.HoTen,
+            TenDangNhap = request.TenDangNhap.Trim(),
+            HoTen = request.HoTen.Trim(),
             MatKhauHash = PasswordHasher.Hash(request.MatKhau),
             VaiTro = request.VaiTro ?? "NHAN_VIEN",
             DangHoatDong = request.DangHoatDong
@@ -94,7 +104,11 @@ public class NguoiDungController : ControllerBase
         user.VaiTro = request.VaiTro ?? user.VaiTro;
         user.DangHoatDong = request.DangHoatDong;
         if (!string.IsNullOrWhiteSpace(request.MatKhau))
+        {
+            if (request.MatKhau.Length < 6)
+                return BadRequest(new { message = "Mật khẩu phải có ít nhất 6 ký tự" });
             user.MatKhauHash = PasswordHasher.Hash(request.MatKhau);
+        }
 
         await _db.SaveChangesAsync(ct);
         return Ok(new { user.Id, user.TenDangNhap, user.HoTen, user.VaiTro, user.DangHoatDong });

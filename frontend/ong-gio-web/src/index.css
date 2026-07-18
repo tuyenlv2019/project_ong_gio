@@ -103,6 +103,12 @@ body {
   padding-inline: 4px !important;
 }
 
+/* Cột Thao tác — giữ tiêu đề và nút trên một dòng */
+.brand-list-table .ant-table-thead > tr > th:last-child,
+.brand-list-table .ant-table-tbody > tr > td:last-child {
+  white-space: nowrap;
+}
+
 .brand-list-table .ant-table-cell-ellipsis .ellipsis-text {
   width: 100%;
 }

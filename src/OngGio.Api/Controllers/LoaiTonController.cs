@@ -50,12 +50,24 @@ public class LoaiTonController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] LoaiTonRequest request, CancellationToken ct)
     {
+        if (!TryNormalize(request, out var normalized, out var error))
+            return BadRequest(new { message = error });
+
+        if (await ExistsDuplicateAsync(normalized, excludeId: null, ct))
+        {
+            return Conflict(new
+            {
+                message = "Đã tồn tại loại tôn trùng Thương hiệu, Độ dày (mm) và Độ mạ vật liệu."
+            });
+        }
+
         var item = new LoaiTon
         {
-            ThuongHieu = request.ThuongHieu,
-            DoDay = request.DoDay,
-            DonGiaMetToi = request.DonGiaMetToi,
-            KgMoiMetToi = request.KgMoiMetToi
+            ThuongHieu = normalized.ThuongHieu,
+            DoDay = normalized.DoDay,
+            DoMaVatLieu = normalized.DoMaVatLieu,
+            DonGiaMetToi = normalized.DonGiaMetToi,
+            KgMoiMetToi = normalized.KgMoiMetToi
         };
         _db.LoaiTons.Add(item);
         await _db.SaveChangesAsync(ct);
@@ -75,10 +87,22 @@ public class LoaiTonController : ControllerBase
         var item = await _db.LoaiTons.FindAsync([id], ct);
         if (item is null) return NotFound();
 
-        item.ThuongHieu = request.ThuongHieu;
-        item.DoDay = request.DoDay;
-        item.DonGiaMetToi = request.DonGiaMetToi;
-        item.KgMoiMetToi = request.KgMoiMetToi;
+        if (!TryNormalize(request, out var normalized, out var error))
+            return BadRequest(new { message = error });
+
+        if (await ExistsDuplicateAsync(normalized, excludeId: id, ct))
+        {
+            return Conflict(new
+            {
+                message = "Đã tồn tại loại tôn trùng Thương hiệu, Độ dày (mm) và Độ mạ vật liệu."
+            });
+        }
+
+        item.ThuongHieu = normalized.ThuongHieu;
+        item.DoDay = normalized.DoDay;
+        item.DoMaVatLieu = normalized.DoMaVatLieu;
+        item.DonGiaMetToi = normalized.DonGiaMetToi;
+        item.KgMoiMetToi = normalized.KgMoiMetToi;
 
         await _db.SaveChangesAsync(ct);
         return Ok(item);
@@ -99,10 +123,58 @@ public class LoaiTonController : ControllerBase
         await _db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    private async Task<bool> ExistsDuplicateAsync(
+        LoaiTonRequest normalized,
+        int? excludeId,
+        CancellationToken ct)
+    {
+        var thuongHieuKey = normalized.ThuongHieu.ToLowerInvariant();
+        var doMaKey = normalized.DoMaVatLieu.ToLowerInvariant();
+
+        return await _db.LoaiTons.AnyAsync(
+            x => (excludeId == null || x.Id != excludeId)
+                && x.ThuongHieu.ToLower() == thuongHieuKey
+                && x.DoDay == normalized.DoDay
+                && x.DoMaVatLieu.ToLower() == doMaKey,
+            ct);
+    }
+
+    private static bool TryNormalize(
+        LoaiTonRequest request,
+        out LoaiTonRequest normalized,
+        out string error)
+    {
+        var thuongHieu = request.ThuongHieu?.Trim() ?? "";
+        var doMaVatLieu = request.DoMaVatLieu?.Trim() ?? "";
+
+        if (string.IsNullOrWhiteSpace(thuongHieu))
+        {
+            normalized = request;
+            error = "Thương hiệu là bắt buộc.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(doMaVatLieu))
+        {
+            normalized = request;
+            error = "Độ mạ vật liệu là bắt buộc.";
+            return false;
+        }
+
+        normalized = request with
+        {
+            ThuongHieu = thuongHieu,
+            DoMaVatLieu = doMaVatLieu,
+        };
+        error = "";
+        return true;
+    }
 }
 
 public record LoaiTonRequest(
     string ThuongHieu,
     decimal DoDay,
+    string DoMaVatLieu,
     decimal DonGiaMetToi,
     decimal KgMoiMetToi);

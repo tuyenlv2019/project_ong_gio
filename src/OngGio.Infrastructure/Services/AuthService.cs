@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using OngGio.Application.Abstractions;
@@ -33,7 +34,7 @@ public class AuthService : IAuthService
     /// <returns>Kết quả đăng nhập kèm JWT nếu hợp lệ.</returns>
     public async Task<AuthResult> LoginAsync(string tenDangNhap, string matKhau, CancellationToken ct = default)
     {
-        var user = _db.NguoiDungs.FirstOrDefault(x => x.TenDangNhap == tenDangNhap);
+        var user = await _db.NguoiDungs.FirstOrDefaultAsync(x => x.TenDangNhap == tenDangNhap, ct);
         if (user == null)
             return new AuthResult(false, "Tên đăng nhập không tồn tại", null, null, null, null, null);
 
@@ -42,6 +43,12 @@ public class AuthService : IAuthService
 
         if (!PasswordHasher.Verify(matKhau, user.MatKhauHash))
             return new AuthResult(false, "Mật khẩu không chính xác", null, null, null, null, null);
+
+        if (PasswordHasher.NeedsRehash(user.MatKhauHash))
+        {
+            user.MatKhauHash = PasswordHasher.Hash(matKhau);
+            await _db.SaveChangesAsync(ct);
+        }
 
         var token = GenerateJwtToken(user);
 

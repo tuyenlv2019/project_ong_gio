@@ -38,3 +38,142 @@ export function findDuplicateThamSo(thamSo: { tenThamSo?: string }[]): string | 
 
   return null;
 }
+
+const FORMULA_KEYWORDS = new Set([
+  'if',
+  'sqrt',
+  'min',
+  'max',
+  'abs',
+  'and',
+  'or',
+  'not',
+  'true',
+  'false',
+]);
+
+/** Lấy danh sách định danh dùng trong công thức ∑Ssx (chữ thường). */
+export function extractFormulaIdentifiers(formula: string): Set<string> {
+  const ids = new Set<string>();
+  const re = /[A-Za-z_][A-Za-z0-9_]*/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(formula)) !== null) {
+    const id = match[0].toLowerCase();
+    if (!FORMULA_KEYWORDS.has(id)) {
+      ids.add(id);
+    }
+  }
+  return ids;
+}
+
+function isParamUsedInFormula(tenThamSo: string, formulaIds: Set<string>): boolean {
+  const name = tenThamSo.trim().toLowerCase();
+  if (!name) return true;
+  if (name === 'w' || name === 'wmax') {
+    return formulaIds.has('w') || formulaIds.has('wmax');
+  }
+  if (name === 'h' || name === 'hmax') {
+    return formulaIds.has('h') || formulaIds.has('hmax');
+  }
+  return formulaIds.has(name);
+}
+
+/**
+ * Kiểm tra mọi tham số form đều xuất hiện trong công thức.
+ * Trả về thông báo lỗi nếu có tham số thừa (không dùng trong công thức).
+ */
+export function findThamSoMissingFromFormula(
+  thamSo: { tenThamSo?: string }[],
+  formula: string | null | undefined,
+): string | null {
+  const names = thamSo
+    .map((item) => item.tenThamSo?.trim())
+    .filter((name): name is string => Boolean(name));
+
+  if (names.length === 0) return null;
+
+  const formulaText = formula?.trim() ?? '';
+  if (!formulaText) {
+    return `Các tham số chưa có trong công thức: ${names.join(', ')}. Mỗi tham số trên form phải xuất hiện trong công thức ∑Ssx.`;
+  }
+
+  const formulaIds = extractFormulaIdentifiers(formulaText);
+  const missing = names.filter((name) => !isParamUsedInFormula(name, formulaIds));
+  if (missing.length === 0) return null;
+
+  return `Tham số không có trong công thức ∑Ssx: ${missing.join(', ')}. Bỏ khỏi form hoặc bổ sung vào công thức.`;
+}
+
+/** Placeholder đặc biệt luôn hợp lệ trong mẫu tên (không cần khai báo trên form). */
+const MAU_TEN_BUILTIN = new Set(['tennhom']);
+
+/** Trích placeholder `{...}` từ mẫu tên sản phẩm. */
+export function extractMauTenPlaceholders(template: string): string[] {
+  const found: string[] = [];
+  const re = /\{([^{}]+)\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(template)) !== null) {
+    const key = match[1].trim();
+    if (key) found.push(key);
+  }
+  return found;
+}
+
+function buildThamSoLookup(thamSo: { tenThamSo?: string }[]) {
+  const names = new Set<string>();
+  for (const item of thamSo) {
+    const name = item.tenThamSo?.trim();
+    if (!name) continue;
+    names.add(name.toLowerCase());
+  }
+  return names;
+}
+
+/** Placeholder mẫu tên có tương ứng trên danh sách tham số form không. */
+export function isMauTenPlaceholderAvailable(
+  placeholder: string,
+  formParamNames: Set<string>,
+): boolean {
+  const key = placeholder.trim().toLowerCase();
+  if (!key) return true;
+  if (MAU_TEN_BUILTIN.has(key)) return true;
+
+  // W / W1 / Wmax → ô W trên form
+  if (key === 'w' || key === 'w1' || key === 'wmax') {
+    return formParamNames.has('w') || formParamNames.has('wmax') || formParamNames.has('w1');
+  }
+  // H / H1 / Hmax → ô H trên form
+  if (key === 'h' || key === 'h1' || key === 'hmax') {
+    return formParamNames.has('h') || formParamNames.has('hmax') || formParamNames.has('h1');
+  }
+  // N ↔ DO_LECH
+  if (key === 'n' || key === 'do_lech') {
+    return formParamNames.has('n') || formParamNames.has('do_lech');
+  }
+
+  return formParamNames.has(key);
+}
+
+/**
+ * Placeholder trong mẫu tên phải tồn tại trong tham số form (trừ {TenNhom}).
+ * Trả về thông báo lỗi nếu có placeholder không hợp lệ.
+ */
+export function findMauTenPlaceholdersMissingFromThamSo(
+  mauTenSanPham: string | null | undefined,
+  thamSo: { tenThamSo?: string }[],
+): string | null {
+  const template = mauTenSanPham?.trim() ?? '';
+  if (!template) return null;
+
+  const placeholders = extractMauTenPlaceholders(template);
+  if (placeholders.length === 0) return null;
+
+  const formParams = buildThamSoLookup(thamSo);
+  const missing = placeholders.filter(
+    (p) => !isMauTenPlaceholderAvailable(p, formParams),
+  );
+  if (missing.length === 0) return null;
+
+  const unique = [...new Set(missing.map((p) => p.trim()))];
+  return `Mẫu tên dùng tham số không có trên form: ${unique.map((p) => `{${p}}`).join(', ')}. Thêm vào "Tham số người dùng nhập" hoặc sửa mẫu tên.`;
+}

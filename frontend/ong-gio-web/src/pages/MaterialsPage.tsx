@@ -8,6 +8,7 @@ import { createLoaiTon, deleteLoaiTon, formatMoney, getLoaiTons, moneyInputNumbe
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
 import type { LoaiTon } from '../types';
+import { getApiErrorMessage } from '../utils/apiError';
 import { createSttColumn } from '../utils/tableColumns';
 import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
 import { renderEllipsisCell } from '../utils/tableCellRender';
@@ -21,6 +22,7 @@ function getMaterialSearchText(row: LoaiTon) {
   return joinSearchParts(
     row.thuongHieu,
     row.doDay,
+    row.doMaVatLieu,
     formatMoney(row.donGiaMetToi),
     row.donGiaMetToi,
     formatKgMetToi(row.kgMoiMetToi),
@@ -51,7 +53,9 @@ export default function MaterialsPage() {
 
   const openModal = (item?: LoaiTon) => {
     setEditing(item ?? null);
-    form.setFieldsValue(item ?? { thuongHieu: '', doDay: 0.58, donGiaMetToi: 222000, kgMoiMetToi: 4.5 });
+    form.setFieldsValue(
+      item ?? { thuongHieu: '', doDay: 0.58, doMaVatLieu: '', donGiaMetToi: 222000, kgMoiMetToi: 4.5 },
+    );
     setOpen(true);
   };
 
@@ -59,15 +63,34 @@ export default function MaterialsPage() {
 
   const onSave = async () => {
     const values = await form.validateFields();
-    if (editing) {
-      await updateLoaiTon(editing.id, values);
-      message.success('Đã cập nhật');
-    } else {
-      await createLoaiTon(values);
-      message.success('Đã thêm loại tôn');
+    const thuongHieu = String(values.thuongHieu ?? '').trim().toLowerCase();
+    const doMaVatLieu = String(values.doMaVatLieu ?? '').trim().toLowerCase();
+    const doDay = Number(values.doDay);
+    const duplicated = data.some(
+      (row) =>
+        (!editing || row.id !== editing.id)
+        && String(row.thuongHieu ?? '').trim().toLowerCase() === thuongHieu
+        && Number(row.doDay) === doDay
+        && String(row.doMaVatLieu ?? '').trim().toLowerCase() === doMaVatLieu,
+    );
+    if (duplicated) {
+      message.error('Đã tồn tại loại tôn trùng Thương hiệu, Độ dày (mm) và Độ mạ vật liệu.');
+      return;
     }
-    setOpen(false);
-    reload();
+
+    try {
+      if (editing) {
+        await updateLoaiTon(editing.id, values);
+        message.success('Đã cập nhật');
+      } else {
+        await createLoaiTon(values);
+        message.success('Đã thêm loại tôn');
+      }
+      setOpen(false);
+      reload();
+    } catch (err) {
+      message.error(getApiErrorMessage(err, 'Không lưu được loại tôn.'));
+    }
   };
 
   return (
@@ -84,11 +107,18 @@ export default function MaterialsPage() {
         className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
-        scroll={{ x: 1040 }}
+        scroll={{ x: 1180 }}
         columns={[
           createSttColumn<LoaiTon>(),
           { title: 'Thương hiệu', dataIndex: 'thuongHieu', width: 140, ellipsis: true, render: renderEllipsisCell },
           { title: 'Độ dày (mm)', dataIndex: 'doDay', width: 110, ellipsis: true, render: renderEllipsisCell },
+          {
+            title: 'Độ mạ vật liệu',
+            dataIndex: 'doMaVatLieu',
+            width: 140,
+            ellipsis: true,
+            render: renderEllipsisCell,
+          },
           {
             title: 'Đơn giá/mét tới (VND)',
             dataIndex: 'donGiaMetToi',
@@ -106,9 +136,10 @@ export default function MaterialsPage() {
           ...createAuditColumns<LoaiTon>(),
           {
             title: 'Thao tác',
-            width: 50,
+            width: 100,
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
             render: (_, row) => (
-              <Space>
+              <Space size={4} wrap={false}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
                 <Popconfirm
                   title="Xóa loại tôn?"
@@ -139,6 +170,13 @@ export default function MaterialsPage() {
           </Form.Item>
           <Form.Item name="doDay" label="Độ dày (mm)" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} step={0.01} />
+          </Form.Item>
+          <Form.Item
+            name="doMaVatLieu"
+            label="Độ mạ vật liệu"
+            rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập độ mạ vật liệu' }]}
+          >
+            <Input placeholder="Nhập độ mạ (vd. Z120, Z275)" />
           </Form.Item>
           <Form.Item name="donGiaMetToi" label="Đơn giá/mét tới (VND)" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} min={0} precision={0} addonAfter="VND" {...moneyInputNumberProps} />

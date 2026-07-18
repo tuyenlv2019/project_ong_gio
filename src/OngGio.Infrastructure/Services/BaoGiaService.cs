@@ -85,6 +85,8 @@ public class BaoGiaService : IBaoGiaService
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (baoGia is null) return null;
 
+        EnsureNotCompleted(baoGia);
+
         baoGia.TenKhachHang = request.TenKhachHang;
         baoGia.ThueSuat = request.ThueSuat;
         baoGia.TrangThai = NormalizeTrangThai(request.TrangThai);
@@ -109,6 +111,8 @@ public class BaoGiaService : IBaoGiaService
             .Include(x => x.ChiTietBaoGias)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (baoGia is null) return false;
+
+        EnsureNotCompleted(baoGia);
 
         _db.ChiTietBaoGias.RemoveRange(baoGia.ChiTietBaoGias);
         _db.BaoGias.Remove(baoGia);
@@ -185,12 +189,33 @@ public class BaoGiaService : IBaoGiaService
     /// <param name="id">Mã báo giá.</param>
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Mảng byte của file Excel.</returns>
-    public async Task<byte[]> ExportExcelAsync(int id, CancellationToken ct = default)
+    public async Task<byte[]> ExportExcelAsync(int id, string? nguoiGuiHoTen = null, CancellationToken ct = default)
     {
         var baoGia = await GetByIdAsync(id, ct)
             ?? throw new KeyNotFoundException($"Khong tim thay bao gia id={id}");
 
-        return BaoGiaExcelExporter.Export(baoGia);
+        var products = await _db.NhomSanPhams
+            .AsNoTracking()
+            .OrderBy(x => x.TenNhom)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct);
+
+        return BaoGiaExcelExporter.Export(baoGia, products, ResolveWebRootPath(), nguoiGuiHoTen);
+    }
+
+    /// <summary>
+    /// Thư mục wwwroot của API (ảnh /images/...). Null nếu không tìm thấy.
+    /// </summary>
+    private static string? ResolveWebRootPath()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot")),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "wwwroot")),
+        };
+
+        return candidates.FirstOrDefault(Directory.Exists);
     }
 
     private async Task ApplyLinesAsync(BaoGia baoGia, CreateBaoGiaRequest request, CancellationToken ct)
@@ -200,6 +225,10 @@ public class BaoGiaService : IBaoGiaService
 
         foreach (var line in request.Lines)
         {
+            var (nhom, loaiTon, thamSo) = await LoadCalculationDataAsync(line.NhomSanPhamId, line.LoaiTonId, ct);
+            var normalizedThamSoNhap = PhanManhRule.AppliesTo(thamSo)
+                ? PhanManhRule.Normalize(line.ThamSoNhap, line.W, line.H)
+                : line.ThamSoNhap;
             var calcRequest = new CalculationRequest(
                 line.NhomSanPhamId,
                 line.LoaiTonId,
@@ -208,9 +237,8 @@ public class BaoGiaService : IBaoGiaService
                 line.SoLuong,
                 line.GiaNhanCong,
                 line.PhuKien,
-                line.ThamSoNhap);
+                normalizedThamSoNhap);
 
-            var (nhom, loaiTon, thamSo) = await LoadCalculationDataAsync(line.NhomSanPhamId, line.LoaiTonId, ct);
             EnsureDimensionsAreComplete(nhom, thamSo, calcRequest);
             var result = await _calculationEngine.CalculateAsync(nhom, loaiTon, thamSo, calcRequest, ct);
 
@@ -244,8 +272,8 @@ public class BaoGiaService : IBaoGiaService
                 ThueSuat = line.ThueSuat,
                 GiaNhanCong = line.GiaNhanCong,
                 PhuKien = line.PhuKien,
-                ThamSoNhapJson = line.ThamSoNhap is { Count: > 0 }
-                    ? JsonSerializer.Serialize(line.ThamSoNhap)
+                ThamSoNhapJson = normalizedThamSoNhap is { Count: > 0 }
+                    ? JsonSerializer.Serialize(normalizedThamSoNhap)
                     : null,
                 DienTichSx1Cai = result.DienTichSx1Cai,
                 TongDienTichLo = result.TongDienTichLo,
@@ -303,7 +331,7 @@ public class BaoGiaService : IBaoGiaService
         }
 
         var missing = keys
-            .Where(key => !HasDimensionValue(request, key))
+            .Where(key => !PhanManhRule.IsParameter(key) && !HasDimensionValue(request, key))
             .ToArray();
 
         if (missing.Length > 0)
@@ -407,6 +435,15 @@ public class BaoGiaService : IBaoGiaService
     private static string NormalizeTrangThai(string? trangThai) =>
         OrderStatusNormalizer.Normalize(trangThai);
 
+    private static void EnsureNotCompleted(BaoGia baoGia)
+    {
+        if (OrderStatusNormalizer.Normalize(baoGia.TrangThai) == OrderStatusNormalizer.HoanThanh)
+        {
+            throw new ArgumentException(
+                "Đơn hàng đã hoàn thành — không được chỉnh sửa hoặc xóa nội dung.");
+        }
+    }
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<BaoGiaLineHistoryDto>> SearchLineHistoryAsync(
         string? search,
@@ -442,7 +479,9 @@ public class BaoGiaService : IBaoGiaService
                 x.NhomSanPhamId,
                 x.NhomSanPham.TenNhom,
                 x.LoaiTonId,
-                x.LoaiTon.ThuongHieu + " " + x.LoaiTon.DoDay.ToString() + "mm",
+                string.IsNullOrWhiteSpace(x.LoaiTon.DoMaVatLieu)
+                    ? x.LoaiTon.ThuongHieu + " " + x.LoaiTon.DoDay.ToString() + "mm"
+                    : x.LoaiTon.ThuongHieu + " " + x.LoaiTon.DoMaVatLieu + "/ " + x.LoaiTon.DoDay.ToString() + " mm",
                 x.WInput,
                 x.HInput,
                 x.ThamSoNhapJson,

@@ -62,9 +62,10 @@ public interface IBaoGiaService
     /// Xuất báo giá ra file Excel.
     /// </summary>
     /// <param name="id">Mã báo gia.</param>
+    /// <param name="nguoiGuiHoTen">Họ tên người gửi (user đăng nhập).</param>
     /// <param name="ct">Cancellation token của request.</param>
     /// <returns>Dữ liệu file Excel.</returns>
-    Task<byte[]> ExportExcelAsync(int id, CancellationToken ct = default);
+    Task<byte[]> ExportExcelAsync(int id, string? nguoiGuiHoTen = null, CancellationToken ct = default);
     /// <summary>
     /// Tìm các dòng chi tiết báo giá đã lưu trước đó để chọn nhanh trên form đơn hàng.
     /// </summary>

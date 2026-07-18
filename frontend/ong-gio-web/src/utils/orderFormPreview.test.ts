@@ -28,9 +28,16 @@ describe('orderFormPreview', () => {
     expect(indices).toEqual([]);
   });
 
-  it('getLineIndicesNeedingPreviewRefresh trả index khi đổi kích thước', () => {
+  it('getLineIndicesNeedingPreviewRefresh bỏ qua khi chỉ đổi kích thước (chờ rời cụm KT)', () => {
     const indices = getLineIndicesNeedingPreviewRefresh({
       lineInputs: [null, { w: 400 }],
+    });
+    expect(indices).toEqual([]);
+  });
+
+  it('getLineIndicesNeedingPreviewRefresh trả index khi đổi loại tôn', () => {
+    const indices = getLineIndicesNeedingPreviewRefresh({
+      lineInputs: [null, { loaiTonId: 3 }],
     });
     expect(indices).toEqual([1]);
   });

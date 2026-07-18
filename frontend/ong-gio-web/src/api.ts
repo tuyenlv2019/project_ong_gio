@@ -55,6 +55,7 @@ export async function createNhomSanPham(payload: {
   tenNhom: string;
   hinhAnhMinhHoa?: string;
   congThucDienTich?: string;
+  mauTenSanPham?: string;
   thamSo?: { tenThamSo: string }[];
 }) {
   const { data } = await api.post('/api/nhom-san-pham', payload);
@@ -69,7 +70,13 @@ export async function createNhomSanPham(payload: {
  */
 export async function updateNhomSanPham(
   id: number,
-  payload: { tenNhom: string; hinhAnhMinhHoa?: string; congThucDienTich?: string; thamSo?: { tenThamSo: string }[] },
+  payload: {
+    tenNhom: string;
+    hinhAnhMinhHoa?: string;
+    congThucDienTich?: string;
+    mauTenSanPham?: string;
+    thamSo?: { tenThamSo: string }[];
+  },
 ) {
   const { data } = await api.put(`/api/nhom-san-pham/${id}`, payload);
   return data;
@@ -213,12 +220,45 @@ export async function updateBaoGiaStatus(id: number, trangThai: string) {
 }
 
 /**
- * Tạo URL export Excel của báo giá.
+ * Tải file Excel báo giá (gửi kèm JWT — không dùng window.open).
  * @param id Mã báo giá.
- * @returns URL tải file Excel.
+ * @param suggestedFileName Tên file gợi ý khi tải về.
  */
-export function getBaoGiaExportUrl(id: number) {
-  return `${API_BASE}/api/bao-gia/${id}/export-excel`;
+export async function downloadBaoGiaExcel(id: number, suggestedFileName?: string) {
+  const response = await api.get(`/api/bao-gia/${id}/export-excel`, {
+    responseType: 'blob',
+  });
+
+  let fileName = suggestedFileName?.trim() || `BaoGia_${id}.xlsx`;
+  if (!fileName.toLowerCase().endsWith('.xlsx')) {
+    fileName = `${fileName}.xlsx`;
+  }
+
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  if (disposition) {
+    const utfMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+    const raw = utfMatch?.[1] ?? plainMatch?.[1];
+    if (raw) {
+      try {
+        fileName = decodeURIComponent(raw.replace(/['"]/g, ''));
+      } catch {
+        fileName = raw.replace(/['"]/g, '');
+      }
+    }
+  }
+
+  const blob = new Blob([response.data], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 /**

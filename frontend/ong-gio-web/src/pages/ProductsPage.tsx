@@ -5,12 +5,19 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
+import { authService } from '../authService';
 import FormulaDisplay from '../components/FormulaDisplay';
 import HintInput from '../components/HintInput';
 import ProductImageField from '../components/ProductImageField';
 import TableSearchBar from '../components/TableSearchBar';
 import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigation';
-import { findDuplicateThamSo, sortOrderedThamSoCoDinhs } from '../utils/productFormParams';
+import {
+  findDuplicateThamSo,
+  findMauTenPlaceholdersMissingFromThamSo,
+  findThamSoMissingFromFormula,
+  sortOrderedThamSoCoDinhs,
+} from '../utils/productFormParams';
+import { suggestMauTenSanPham } from '../utils/tenSanPhamTemplate';
 import { createSttColumn } from '../utils/tableColumns';
 import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
 import { renderEllipsisCell } from '../utils/tableCellRender';
@@ -23,16 +30,25 @@ function getProductSearchText(row: NhomSanPham) {
     .map((item) => item.tenThamSo)
     .join(', ');
 
-  return joinSearchParts(row.tenNhom, row.hinhAnhMinhHoa, row.congThucDienTich, thamSo, ...getAuditSearchText(row));
+  return joinSearchParts(
+    row.tenNhom,
+    row.hinhAnhMinhHoa,
+    row.congThucDienTich,
+    row.mauTenSanPham,
+    thamSo,
+    ...getAuditSearchText(row),
+  );
 }
 
 export default function ProductsPage() {
+  const isAdmin = authService.isAdmin();
   const [data, setData] = useState<NhomSanPham[]>([]);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NhomSanPham | null>(null);
   const [form] = Form.useForm();
   const [formulaCopyKey, setFormulaCopyKey] = useState(0);
+  const congThucDienTichWatch = Form.useWatch('congThucDienTich', form);
 
   const reload = () => {
     void getNhomSanPhams().then(setData);
@@ -80,29 +96,39 @@ export default function ProductsPage() {
 
   const openModal = (item?: NhomSanPham) => {
     setEditing(item ?? null);
+    const defaultThamSo = item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo })) ?? [
+      { tenThamSo: 'W' },
+      { tenThamSo: 'H' },
+      { tenThamSo: 'L' },
+    ];
     form.setFieldsValue({
       tenNhom: item?.tenNhom ?? '',
       hinhAnhMinhHoa: item?.hinhAnhMinhHoa ?? '',
       congThucDienTich: item?.congThucDienTich ?? '',
-      thamSo: item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo })) ?? [
-        { tenThamSo: 'W' },
-        { tenThamSo: 'H' },
-        { tenThamSo: 'L' },
-      ],
+      mauTenSanPham:
+        item?.mauTenSanPham ??
+        suggestMauTenSanPham(defaultThamSo.map((t) => t.tenThamSo)),
+      thamSo: defaultThamSo,
     });
     setFormulaCopyKey((k) => k + 1);
     setOpen(true);
   };
 
+  const fillSuggestedMauTen = () => {
+    const thamSo = (form.getFieldValue('thamSo') as { tenThamSo?: string }[] | undefined) ?? [];
+    const suggested = suggestMauTenSanPham(thamSo.map((t) => String(t.tenThamSo ?? '')));
+    form.setFieldValue('mauTenSanPham', suggested);
+  };
+
   useOpenCreateFromNavigation(() => openModal());
 
-  const onSave = async () => {
-    const values = await form.validateFields();
-    const duplicateMsg = findDuplicateThamSo(values.thamSo ?? []);
-    if (duplicateMsg) {
-      message.warning(duplicateMsg);
-      return;
-    }
+  const persistProduct = async (values: {
+    tenNhom: string;
+    hinhAnhMinhHoa?: string;
+    congThucDienTich?: string;
+    mauTenSanPham?: string;
+    thamSo?: { tenThamSo?: string }[];
+  }) => {
     try {
       if (editing) {
         await updateNhomSanPham(editing.id, values);
@@ -119,6 +145,50 @@ export default function ProductsPage() {
     }
   };
 
+  const onSave = async () => {
+    const values = await form.validateFields();
+    const duplicateMsg = findDuplicateThamSo(values.thamSo ?? []);
+    if (duplicateMsg) {
+      message.warning(duplicateMsg);
+      return;
+    }
+    const missingInFormulaMsg = findThamSoMissingFromFormula(
+      values.thamSo ?? [],
+      values.congThucDienTich,
+    );
+    if (missingInFormulaMsg) {
+      message.warning(missingInFormulaMsg);
+      return;
+    }
+    const mauTenMissingMsg = findMauTenPlaceholdersMissingFromThamSo(
+      values.mauTenSanPham,
+      values.thamSo ?? [],
+    );
+    if (mauTenMissingMsg) {
+      message.warning(mauTenMissingMsg);
+      return;
+    }
+
+    const nextFormula = String(values.congThucDienTich ?? '').trim();
+    const prevFormula = String(editing?.congThucDienTich ?? '').trim();
+    const formulaChanged = isAdmin && nextFormula !== prevFormula;
+
+    if (formulaChanged) {
+      Modal.confirm({
+        title: 'Xác nhận thay đổi công thức?',
+        content: editing
+          ? `Công thức ∑Ssx của "${editing.tenNhom}" sẽ được cập nhật. Diện tích các đơn hàng mới sẽ tính theo công thức mới.`
+          : 'Bạn đang lưu công thức ∑Ssx mới cho sản phẩm này. Xác nhận để tiếp tục?',
+        okText: 'Xác nhận lưu',
+        cancelText: 'Hủy',
+        onOk: () => persistProduct(values),
+      });
+      return;
+    }
+
+    await persistProduct(values);
+  };
+
   return (
     <Card
       title="Quản lý sản phẩm"
@@ -133,10 +203,16 @@ export default function ProductsPage() {
         className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
-        scroll={{ x: 1520 }}
+        scroll={{ x: 1760 }}
         columns={[
           createSttColumn<NhomSanPham>(),
-          { title: 'Tên nhóm', dataIndex: 'tenNhom', width: 200, ellipsis: true, render: renderEllipsisCell },
+          {
+            title: 'Tên nhóm',
+            dataIndex: 'tenNhom',
+            width: 100,
+            render: (value?: string) => value?.trim() || '—',
+            onCell: () => ({ style: { whiteSpace: 'normal', wordBreak: 'break-word' } }),
+          },
           {
             title: 'Hình ảnh',
             dataIndex: 'hinhAnhMinhHoa',
@@ -157,8 +233,15 @@ export default function ProductsPage() {
           {
             title: 'Công thức ∑Ssx (m²)',
             dataIndex: 'congThucDienTich',
-            width: 360,
+            width: 320,
             render: (value: string) => <FormulaDisplay value={value} variant="inline" emptyText="-" />,
+          },
+          {
+            title: 'Mẫu tên SP',
+            dataIndex: 'mauTenSanPham',
+            width: 240,
+            ellipsis: true,
+            render: renderEllipsisCell,
           },
           {
             title: 'Tham số nhập trên form',
@@ -171,9 +254,10 @@ export default function ProductsPage() {
           ...createAuditColumns<NhomSanPham>(),
           {
             title: 'Thao tác',
-            width: 60,
+            width: 100,
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
             render: (_, row) => (
-              <Space>
+              <Space size={4} wrap={false}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
                 <Popconfirm
                   title="Xóa sản phẩm?"
@@ -232,43 +316,70 @@ export default function ProductsPage() {
           </Form.Item>
           <Form.Item
             label="Công thức tính diện tích ∑Ssx (m²)"
-            required
-            extra="Mỗi dòng: TênBiến = biểu thức. Dòng cuối: Ssx = ... Dùng tên tham số ở trên (W, H, L, r, ...). Hỗ trợ + - * /, if(), sqrt()."
+            required={isAdmin}
+            extra={
+              isAdmin
+                ? 'Mỗi dòng: TênBiến = biểu thức. Dòng cuối: Ssx = ... Dùng tên tham số ở trên (W, H, L, r, ...). Hỗ trợ + - * /, if(), sqrt().'
+                : 'Chỉ tài khoản ADMIN được sửa công thức. Bạn chỉ có thể xem.'
+            }
           >
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <Select
-                key={formulaCopyKey}
-                showSearch
-                allowClear
-                placeholder={
-                  formulaCopySources.length > 0
-                    ? 'Sao chép công thức từ sản phẩm có sẵn...'
-                    : 'Chưa có sản phẩm khác có công thức để sao chép'
-                }
-                disabled={formulaCopySources.length === 0}
-                optionFilterProp="label"
-                style={{ width: '100%' }}
-                options={formulaCopySources.map((n) => ({
-                  value: n.id,
-                  label: n.tenNhom,
-                }))}
-                onChange={(value) => {
-                  if (value !== undefined && value !== null) {
-                    copyFormulaFromProduct(Number(value));
+            {isAdmin ? (
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Select
+                  key={formulaCopyKey}
+                  showSearch
+                  allowClear
+                  placeholder={
+                    formulaCopySources.length > 0
+                      ? 'Sao chép công thức từ sản phẩm có sẵn...'
+                      : 'Chưa có sản phẩm khác có công thức để sao chép'
                   }
-                }}
-              />
-              <Form.Item
-                name="congThucDienTich"
-                noStyle
-                rules={[{ required: true, message: 'Nhập công thức diện tích' }]}
-              >
-                <Input.TextArea
-                  rows={6}
-                  placeholder={'R = r + W\nS_matcong = (R + 58) * (R + 58) * 2 / 1000000\nSsx = S_matcong + ...'}
+                  disabled={formulaCopySources.length === 0}
+                  optionFilterProp="label"
+                  style={{ width: '100%' }}
+                  options={formulaCopySources.map((n) => ({
+                    value: n.id,
+                    label: n.tenNhom,
+                  }))}
+                  onChange={(value) => {
+                    if (value !== undefined && value !== null) {
+                      copyFormulaFromProduct(Number(value));
+                    }
+                  }}
                 />
-              </Form.Item>
-            </Space>
+                <Form.Item
+                  name="congThucDienTich"
+                  noStyle
+                  rules={[{ required: true, message: 'Nhập công thức diện tích' }]}
+                >
+                  <Input.TextArea
+                    rows={6}
+                    placeholder={'R = r + W\nS_matcong = (R + 58) * (R + 58) * 2 / 1000000\nSsx = S_matcong + ...'}
+                  />
+                </Form.Item>
+              </Space>
+            ) : (
+              <>
+                <Form.Item name="congThucDienTich" hidden>
+                  <Input />
+                </Form.Item>
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: 6,
+                    background: '#fafafa',
+                    minHeight: 120,
+                  }}
+                >
+                  <FormulaDisplay
+                    value={congThucDienTichWatch}
+                    variant="block"
+                    emptyText="Chưa có công thức (chỉ Admin được nhập)"
+                  />
+                </div>
+              </>
+            )}
           </Form.Item>
           <Form.List name="thamSo">
             {(fields, { add, remove }) => (
@@ -276,6 +387,7 @@ export default function ProductsPage() {
                 <div style={{ marginBottom: 8, fontWeight: 600 }}>Tham số người dùng nhập trên form đơn hàng</div>
                 <div style={{ marginBottom: 12, color: 'rgba(0,0,0,0.45)', fontSize: 13 }}>
                   Mỗi tham số phải khác nhau (không trùng tên, không trùng ô W/H — ví dụ không thêm cả W và Wmax).
+                  Mỗi tham số phải xuất hiện trong công thức ∑Ssx — nếu không có sẽ không cho lưu.
                 </div>
                 {fields.map(({ key, name, ...restField }) => (
                   <Space key={key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
@@ -298,6 +410,24 @@ export default function ProductsPage() {
               </>
             )}
           </Form.List>
+          <Form.Item
+            label="Mẫu tên sản phẩm mặc định"
+            style={{ marginTop: 16 }}
+            extra={
+              <>
+                Dùng khi tạo dòng trên form đơn hàng. Placeholder: {'{TenNhom}'}, {'{W}'}/{'{W1}'}, {'{H}'}/{'{H1}'},{' '}
+                {'{W2}'}, {'{H2}'}, {'{L}'}, {'{R}'}, {'{D}'}, {'{N}'}…
+                Mỗi placeholder (trừ {'{TenNhom}'}) phải có trong danh sách tham số form — nếu không sẽ không cho lưu.
+              </>
+            }
+          >
+            <Space.Compact style={{ width: '100%' }}>
+              <Form.Item name="mauTenSanPham" noStyle>
+                <HintInput placeholder="Ống gió KT {W}x{H} L{L} mm" style={{ width: '100%' }} />
+              </Form.Item>
+              <Button onClick={fillSuggestedMauTen}>Gợi ý</Button>
+            </Space.Compact>
+          </Form.Item>
         </Form>
       </Modal>
     </Card>

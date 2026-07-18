@@ -169,9 +169,10 @@ export default function UsersPage() {
           ...createAuditColumns<NguoiDung>(),
           {
             title: 'Thao tác',
-            width: isAdmin ? 70 : 50,
+            width: isAdmin ? 130 : 100,
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
             render: (_, row) => (
-              <Space>
+              <Space size={4} wrap={false}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)} />
                 {isAdmin && (
                   <Button

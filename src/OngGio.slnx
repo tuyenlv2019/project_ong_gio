@@ -1,5 +1,7 @@
 <Solution>
   <Project Path="../tests/OngGio.Application.Tests/OngGio.Application.Tests.csproj" />
+  <Project Path="../tests/OngGio.Infrastructure.Tests/OngGio.Infrastructure.Tests.csproj" />
+  <Project Path="../tests/OngGio.Api.Tests/OngGio.Api.Tests.csproj" />
   <Project Path="OngGio.Api/OngGio.Api.csproj" />
   <Project Path="OngGio.Application/OngGio.Application.csproj" />
   <Project Path="OngGio.Domain/OngGio.Domain.csproj" />
