@@ -372,6 +372,25 @@ public class NhomSanPhamController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (item is null) return NotFound();
 
+        // If the product had an uploaded image, attempt to delete the file from disk
+        if (!string.IsNullOrWhiteSpace(item.HinhAnhMinhHoa)
+            && item.HinhAnhMinhHoa.StartsWith("/images/uploads/", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var fileName = item.HinhAnhMinhHoa.Substring("/images/uploads/".Length);
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "uploads", fileName);
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                }
+            }
+            catch
+            {
+                // ignore failures to delete file; do not prevent DB deletion
+            }
+        }
+
         _db.ThamSoCoDinhs.RemoveRange(item.ThamSoCoDinhs);
         _db.NhomSanPhams.Remove(item);
         await _db.SaveChangesAsync(ct);

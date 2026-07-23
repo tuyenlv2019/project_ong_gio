@@ -177,14 +177,12 @@ export default function ProductsPage() {
 
     const nextFormula = String(values.congThucDienTich ?? '').trim();
     const prevFormula = String(editing?.congThucDienTich ?? '').trim();
-    const formulaChanged = isAdmin && nextFormula !== prevFormula;
+    const formulaChanged = isAdmin && Boolean(editing) && nextFormula !== prevFormula;
 
     if (formulaChanged) {
       Modal.confirm({
         title: 'Xác nhận thay đổi công thức?',
-        content: editing
-          ? `Công thức ∑Ssx của "${editing.tenNhom}" sẽ được cập nhật. Diện tích các đơn hàng mới sẽ tính theo công thức mới.`
-          : 'Bạn đang lưu công thức ∑Ssx mới cho sản phẩm này. Xác nhận để tiếp tục?',
+        content: `Công thức ∑Ssx của "${editing.tenNhom}" sẽ được cập nhật. Diện tích các đơn hàng mới sẽ tính theo công thức mới.`,
         okText: 'Xác nhận lưu',
         cancelText: 'Hủy',
         onOk: () => persistProduct(values),
