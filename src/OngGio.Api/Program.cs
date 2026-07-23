@@ -130,7 +130,8 @@ app.MapControllers();
 
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
-    app.MapFallbackToFile("index.html");
+    // SPA client routes phải truy cập công khai, nếu không fallback endpoint sẽ bị FallbackPolicy chặn và trả 401.
+    app.MapFallbackToFile("index.html").AllowAnonymous();
 }
 
 app.Run();
