@@ -8,7 +8,10 @@ using OngGio.Api;
 using OngGio.Application;
 using OngGio.Infrastructure;
 
-var builder = WebApplication.CreateBuilder(args);
+// Render/container có giới hạn inotify/file descriptor khá thấp, nên tắt reload cấu hình theo file
+// để tránh host khởi tạo FileSystemWatcher cho appsettings*.json khi start.
+var builderArgs = args.Concat(["hostBuilder:reloadConfigOnChange=false"]).ToArray();
+var builder = WebApplication.CreateBuilder(builderArgs);
 
 var connectionString = PostgresConnectionStringNormalizer.Normalize(
     builder.Configuration.GetConnectionString("DefaultConnection"));
