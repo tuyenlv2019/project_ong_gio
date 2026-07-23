@@ -163,6 +163,52 @@ body {
   overflow: hidden;
 }
 
+.order-product-table .dimension-column-cell {
+  padding-inline: 8px;
+}
+
+.dimension-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.dimension-fields-grid .hint-control-wrap,
+.dimension-fields-grid .ant-input-number {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ton-fields-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ton-fields-stack .price-field-row,
+.ton-fields-stack .price-field-label,
+.ton-fields-stack .ton-display-value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ton-fields-stack .price-field-label {
+  margin-bottom: 3px;
+  line-height: 1.2;
+}
+
+.ton-fields-stack .ton-display-value {
+  overflow: hidden;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .order-form-sticky-header {
   position: sticky;
   top: 0;

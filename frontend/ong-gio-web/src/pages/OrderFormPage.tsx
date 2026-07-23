@@ -155,7 +155,7 @@ function getDimensionValue(item: Partial<LineFormValues>, field: DimensionField)
   if (field.target === 'thamSoNhap') {
     const key = field.paramKey ?? field.key;
     const thamSo = item.thamSoNhap ?? {};
-    if (thamSo[key] != null && thamSo[key] !== '') return thamSo[key];
+    if (thamSo[key] != null) return thamSo[key];
     const match = Object.keys(thamSo).find((k) => k.toLowerCase() === key.toLowerCase());
     return match != null ? thamSo[match] : undefined;
   }
@@ -1148,9 +1148,11 @@ export default function OrderFormPage() {
       const manualResetFields: { name: (string | number)[]; value: unknown }[] = [];
       const previewClears: number[] = [];
       const nhomChangedIndices: number[] = [];
+      const dimensionChangedIndices: number[] = [];
       changedLines.forEach((patch, index) => {
         if (patch && patchHasDimensionChange(patch)) {
           dimensionChangedLinesRef.current.add(index);
+          dimensionChangedIndices.push(index);
         }
         if (patch && patchHasLoaiTonChange(patch)) {
           loaiTonChangedLinesRef.current.add(index);
@@ -1188,7 +1190,6 @@ export default function OrderFormPage() {
           tenSanPhamUserEditedRef.current.delete(index);
           nhomChangedIndices.push(index);
         }
-        // Tên SP theo kích thước: không cập nhật khi đang gõ — chờ blur/Tab ra khỏi cụm KT.
       });
       if (fieldsToSet.length > 0) {
         previewClears.forEach((index) => {
@@ -1218,6 +1219,13 @@ export default function OrderFormPage() {
         internalFormUpdateRef.current = true;
         form.setFields(manualResetFields);
       }
+      // Kích thước thay đổi thì cập nhật tên ngay theo mẫu của nhóm sản phẩm.
+      dimensionChangedIndices
+        .filter((index) => !nhomChangedIndices.includes(index))
+        .forEach((index) => {
+          tenSanPhamUserEditedRef.current.delete(index);
+          applyAutoTenSanPham(index, { force: true });
+        });
     }
 
     const items = allValues.lineInputs || [];
@@ -1536,8 +1544,6 @@ export default function OrderFormPage() {
                   render: (_: unknown, field: LineListField) => (
                     <TonInfoCell
                       fieldName={field.name}
-                      form={form}
-                      loaiTonById={loaiTonById}
                       loaiTonOptions={loaiTonOptions}
                       trongLuongKg={linePreviews[field.name]?.trongLuongKg}
                       loaiTonRules={
@@ -1552,7 +1558,7 @@ export default function OrderFormPage() {
                 {
                   title: 'Diện tích Sx',
                   dataIndex: 'dienTichSx',
-                  width: 156,
+                  width: 110,
                   align: 'left' as const,
                   onHeaderCell: () => ({
                     className: 'order-area-column',
@@ -1599,13 +1605,13 @@ export default function OrderFormPage() {
                           </Form.Item>
                       </div>
                       <div className="price-field-row">
-                        <FieldLabel>Phụ kiện đi kèm</FieldLabel>
+                        <FieldLabel>Giá phụ kiện đi kèm</FieldLabel>
                         <Form.Item
                           name={[field.name, 'phuKien']}
                           noStyle
                           rules={requiredRulesFor('Phụ kiện đi kèm (VNĐ)') ? [{ required: true, message: 'Nhập phụ kiện' }] : undefined}
                         >
-                          <HintInputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} tooltip="Phụ kiện đi kèm (VNĐ)" {...moneyInputNumberProps} />
+                          <HintInputNumber min={0} precision={0} controls={false} style={{ width: '100%' }} tooltip="Giá phụ kiện đi kèm (VNĐ)" {...moneyInputNumberProps} />
                         </Form.Item>
                       </div>
                     </div>
@@ -1810,7 +1816,21 @@ export default function OrderFormPage() {
                     loaiTonById={loaiTonById}
                     withManualTonFlags={withManualTonFlags}
                   />
-                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(createEmptyLine(orderableNhomList, loaiTonList))} style={{ marginTop: 16, width: '100%' }}>
+                  <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      // Form.List có thể phát changedValues chứa lại toàn bộ danh sách khi thêm.
+                      // Đánh dấu đây là cập nhật nội bộ để không hiểu nhầm các dòng đã sao chép
+                      // là vừa đổi loại sản phẩm rồi xóa W/H/thamSoNhap của chúng.
+                      internalFormUpdateRef.current = true;
+                      add(createEmptyLine(orderableNhomList, loaiTonList));
+                      setTimeout(() => {
+                        internalFormUpdateRef.current = false;
+                      }, 0);
+                    }}
+                    style={{ marginTop: 16, width: '100%' }}
+                  >
                     Thêm dòng mới
                   </Button>
                   {/* CSS cục bộ cho bảng cụm sản phẩm (layout cột, ellipsis, sticky) */}

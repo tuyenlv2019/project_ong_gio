@@ -21,6 +21,7 @@ internal static class BaoGiaExcelExporter
     private const int StyleSourceRow = 18;
     private const int FooterStartRow = 19;
     private const int FooterEndRow = 24;
+    private const string MoneyNumberFormat = "#,##0";
 
     // Cột nhập liệu (màu vàng nhạt) vs cột tính theo công thức (màu xanh nhạt) theo mẫu Sheet 2.
     private static readonly int[] InputColumns = { 2, 3, 7, 8, 9, 10, 11, 12, 15 };
@@ -320,6 +321,7 @@ internal static class BaoGiaExcelExporter
         sheet.Cell(row, 7).Value = line.ThanhTienTon;
         sheet.Cell(row, 8).Value = line.GiaNhanCong;
         sheet.Cell(row, 9).Value = line.PhuKien;
+        sheet.Range(row, 7, row, 9).Style.NumberFormat.Format = MoneyNumberFormat;
         sheet.Cell(row, 10).Value = line.DonViTinh;
         sheet.Cell(row, 11).Value = line.SoLuong;
         sheet.Cell(row, 12).Value = line.ThueSuat;

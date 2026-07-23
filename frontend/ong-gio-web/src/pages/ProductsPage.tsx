@@ -20,7 +20,6 @@ import {
 import { suggestMauTenSanPham } from '../utils/tenSanPhamTemplate';
 import { createSttColumn } from '../utils/tableColumns';
 import { getAuditSearchText, createAuditColumns } from '../utils/auditDisplay';
-import { renderEllipsisCell } from '../utils/tableCellRender';
 import { filterBySearch, joinSearchParts } from '../utils/tableSearch';
 import { resolveMasterImageUrl } from '../utils/imageUrl';
 import type { NhomSanPham, ThamSoCoDinh } from '../types';
@@ -129,12 +128,19 @@ export default function ProductsPage() {
     mauTenSanPham?: string;
     thamSo?: { tenThamSo?: string }[];
   }) => {
+    const payload = {
+      ...values,
+      thamSo: values.thamSo?.map((item) => ({
+        tenThamSo: String(item.tenThamSo ?? '').trim(),
+      })),
+    };
+
     try {
       if (editing) {
-        await updateNhomSanPham(editing.id, values);
+        await updateNhomSanPham(editing.id, payload);
         message.success('Đã cập nhật sản phẩm');
       } else {
-        await createNhomSanPham(values);
+        await createNhomSanPham(payload);
         message.success('Đã thêm sản phẩm');
       }
       setOpen(false);
@@ -203,7 +209,7 @@ export default function ProductsPage() {
         className="brand-list-table"
         rowKey="id"
         dataSource={filteredData}
-        scroll={{ x: 1760 }}
+        scroll={{ x: 1610 }}
         columns={[
           createSttColumn<NhomSanPham>(),
           {
@@ -239,17 +245,19 @@ export default function ProductsPage() {
           {
             title: 'Mẫu tên SP',
             dataIndex: 'mauTenSanPham',
-            width: 240,
-            ellipsis: true,
-            render: renderEllipsisCell,
+            width: 120,
+            render: (value?: string) => value?.trim() || '—',
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+            onCell: () => ({ style: { whiteSpace: 'normal', overflowWrap: 'anywhere' } }),
           },
           {
             title: 'Tham số nhập trên form',
             dataIndex: 'thamSoCoDinhs',
-            width: 220,
-            ellipsis: true,
+            width: 190,
             render: (ts: ThamSoCoDinh[]) =>
-              renderEllipsisCell(sortOrderedThamSoCoDinhs(ts ?? []).map((t) => t.tenThamSo).join(', ') || undefined),
+              sortOrderedThamSoCoDinhs(ts ?? []).map((t) => t.tenThamSo).join(', ') || '—',
+            onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+            onCell: () => ({ style: { whiteSpace: 'normal', overflowWrap: 'anywhere' } }),
           },
           ...createAuditColumns<NhomSanPham>(),
           {

@@ -174,6 +174,9 @@ public class BaoGiaExcelExporterTests
     Assert.Equal(1, sheet.Cell(18, 1).GetValue<int>());
     Assert.Equal("Ống vuông test", sheet.Cell(18, 2).GetString());
     Assert.Equal("Hoa Sen Z120/ 0.8 mm", sheet.Cell(18, 3).GetString());
+    Assert.Equal("#,##0", sheet.Cell(18, 7).Style.NumberFormat.Format);
+    Assert.Equal("#,##0", sheet.Cell(18, 8).Style.NumberFormat.Format);
+    Assert.Equal("#,##0", sheet.Cell(18, 9).Style.NumberFormat.Format);
     Assert.Equal(2, sheet.Cell(18, 11).GetValue<int>());
     Assert.Equal(500_000m, sheet.Cell(18, 14).GetValue<decimal>());
   }
