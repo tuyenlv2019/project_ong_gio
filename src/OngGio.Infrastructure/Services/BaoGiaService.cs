@@ -178,7 +178,8 @@ public class BaoGiaService : IBaoGiaService
                 CreatedAt = x.CreatedAt,
                 UpdatedBy = x.UpdatedBy,
                 UpdatedAt = x.UpdatedAt,
-                TongSoSanPham = x.ChiTietBaoGias.Sum(c => c.SoLuong),
+                // Đồng bộ với màn chi tiết: "Tổng SP" ở danh sách thực chất là số dòng chi tiết.
+                TongSoSanPham = x.ChiTietBaoGias.Count,
             })
             .ToListAsync(ct);
     }

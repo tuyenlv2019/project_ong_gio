@@ -24,4 +24,18 @@ describe('orderFormLineRemap', () => {
   it('remapIndexSetAfterMove cập nhật manual-ton indices', () => {
     expect(remapIndexSetAfterMove(new Set([0, 2]), 0, 2)).toEqual(new Set([1, 2]));
   });
+
+  it('remapRecordKeysAfterMove giữ nguyên dữ liệu theo dòng khi move lên', () => {
+    const rows = {
+      0: { w: 100, h: 200, thamSoNhap: { a: 1 } },
+      1: { w: 300, h: 400, thamSoNhap: { b: 2 } },
+      2: { w: 500, h: 600, thamSoNhap: { c: 3 } },
+    } as Record<number, { w: number; h: number; thamSoNhap: Record<string, number> }>;
+
+    expect(remapRecordKeysAfterMove(rows, 2, 0)).toEqual({
+      0: { w: 500, h: 600, thamSoNhap: { c: 3 } },
+      1: { w: 100, h: 200, thamSoNhap: { a: 1 } },
+      2: { w: 300, h: 400, thamSoNhap: { b: 2 } },
+    });
+  });
 });

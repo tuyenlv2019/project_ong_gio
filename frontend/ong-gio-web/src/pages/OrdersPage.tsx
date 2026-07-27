@@ -146,7 +146,7 @@ export default function OrdersPage() {
             ),
           },
           {
-            title: 'Tổng SP',
+            title: 'Tổng số dòng',
             dataIndex: 'tongSoSanPham',
             width: 90,
             align: 'center' as const,

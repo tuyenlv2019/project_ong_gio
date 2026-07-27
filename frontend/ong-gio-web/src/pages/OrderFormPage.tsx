@@ -200,6 +200,49 @@ function getMissingLineMessages(item: Partial<LineFormValues>, nhom?: NhomSanPha
   return messages;
 }
 
+/**
+ * Tạo lỗi field cho từng dòng để AntD bôi đỏ đúng ô khi bấm Lưu.
+ */
+function getMissingLineFieldErrors(
+  lineIndex: number,
+  item: Partial<LineFormValues>,
+  nhom?: NhomSanPham,
+) {
+  const errors: { name: (string | number)[]; errors: string[] }[] = [];
+
+  if (!item.tenSanPham?.trim()) {
+    errors.push({ name: ['lineInputs', lineIndex, 'tenSanPham'], errors: ['Nhập Tên sản phẩm'] });
+  }
+  if (!item.nhomSanPhamId) {
+    errors.push({ name: ['lineInputs', lineIndex, 'nhomSanPhamId'], errors: ['Chọn Loại sản phẩm'] });
+  }
+  if (!item.loaiTonId) {
+    errors.push({ name: ['lineInputs', lineIndex, 'loaiTonId'], errors: ['Chọn Loại tôn'] });
+  }
+  if (!item.soLuong || item.soLuong <= 0) {
+    errors.push({ name: ['lineInputs', lineIndex, 'soLuong'], errors: ['Nhập Số lượng'] });
+  }
+  if (!item.donViTinh?.trim()) {
+    errors.push({ name: ['lineInputs', lineIndex, 'donViTinh'], errors: ['Nhập Đơn vị tính'] });
+  }
+  if (item.thueSuat === undefined || item.thueSuat === null) {
+    errors.push({ name: ['lineInputs', lineIndex, 'thueSuat'], errors: ['Nhập Thuế suất'] });
+  }
+
+  if (nhom) {
+    getDimensionFields(nhom)
+      .filter((field) => !isPhanManhParameter(field.key) && !isFilledNumber(getDimensionValue(item, field)))
+      .forEach((field) => {
+        const name = field.target === 'thamSoNhap'
+          ? ['lineInputs', lineIndex, 'thamSoNhap', field.paramKey ?? field.key]
+          : ['lineInputs', lineIndex, field.target];
+        errors.push({ name, errors: [`Nhập ${field.label}`] });
+      });
+  }
+
+  return errors;
+}
+
 /** Gộp thông báo thiếu sót thành một chuỗi hiển thị cho dòng `lineIndex`. */
 function describeIncompleteLine(
   lineIndex: number,
@@ -1015,6 +1058,9 @@ export default function OrderFormPage() {
       return;
     }
 
+    // Form.List move có thể phát onValuesChange với payload nhìn giống "đổi loại SP",
+    // nên tạm đánh dấu đây là cập nhật nội bộ để tránh nhánh reset kích thước chạy nhầm.
+    internalFormUpdateRef.current = true;
     move(fromIndex, toIndex);
     remapLinePreviewsAfterMove(fromIndex, toIndex);
 
@@ -1022,6 +1068,9 @@ export default function OrderFormPage() {
     ensureNewRowIfNeeded({ lineInputs: linesAfterMove });
     const finalLines = form.getFieldValue('lineInputs') || [];
     await refreshPreviews({ lineInputs: finalLines });
+    setTimeout(() => {
+      internalFormUpdateRef.current = false;
+    }, 0);
   };
 
   /** Di chuyển lên/xuống một bậc. */
@@ -1303,17 +1352,29 @@ export default function OrderFormPage() {
       return;
     }
     const allLineInputs: LineFormValues[] = form.getFieldValue('lineInputs') || [];
+    const incompleteLineFields: { name: (string | number)[]; errors: string[] }[] = [];
     const incompleteMessages = allLineInputs
       .map((line, index) => {
         if (isSkippedTrailingLine(index, line, allLineInputs.length)) return null;
         if (!hasAnyLineInput(line)) return null;
         const nhom = nhomList.find((n) => n.id === Number(line?.nhomSanPhamId));
         if (!isRowIncomplete(line, index, allLineInputs.length)) return null;
+        incompleteLineFields.push(...getMissingLineFieldErrors(index, line, nhom));
         return describeIncompleteLine(index, line, nhom);
       })
       .filter((msg): msg is string => Boolean(msg));
 
     if (incompleteMessages.length > 0) {
+      setValidationLines(allLineInputs);
+      if (incompleteLineFields.length > 0) {
+        form.setFields(incompleteLineFields);
+        const firstErrorField = incompleteLineFields[0]?.name;
+        if (firstErrorField) {
+          setTimeout(() => {
+            form.scrollToField(firstErrorField);
+          }, 0);
+        }
+      }
       showMultiLineWarning(incompleteMessages);
       return;
     }
@@ -1773,8 +1834,14 @@ export default function OrderFormPage() {
                           okButtonProps={{ danger: true }}
                           disabled={fields.length === 1}
                           onConfirm={() => {
+                            // Xóa dòng cũng là thay đổi cấu trúc nội bộ của Form.List, nên tạm chặn onValuesChange
+                            // để tránh nhánh reset kích thước/ tham số của các dòng còn lại chạy nhầm.
+                            internalFormUpdateRef.current = true;
                             remove(field.name);
                             remapLinePreviewsAfterRemove(field.name);
+                            setTimeout(() => {
+                              internalFormUpdateRef.current = false;
+                            }, 0);
                           }}
                         >
                           <Button
