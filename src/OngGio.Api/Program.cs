@@ -97,18 +97,18 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    try
-    {
-        await OngGio.Infrastructure.DependencyInjection.SeedDataAsync(app.Services);
-    }
-    catch (Exception ex)
-    {
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-        logger.LogError(ex, "Không thể kết nối PostgreSQL. Kiểm tra ConnectionStrings:DefaultConnection / biến môi trường.");
-    }
-}
+// if (!app.Environment.IsEnvironment("Testing"))
+// {
+//     try
+//     {
+//         await OngGio.Infrastructure.DependencyInjection.SeedDataAsync(app.Services);
+//     }
+//     catch (Exception ex)
+//     {
+//         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+//         logger.LogError(ex, "Không thể kết nối PostgreSQL. Kiểm tra ConnectionStrings:DefaultConnection / biến môi trường.");
+//     }
+// }
 
 if (app.Environment.IsDevelopment())
 {
