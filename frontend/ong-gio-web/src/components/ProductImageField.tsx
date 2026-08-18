@@ -71,8 +71,8 @@ export default function ProductImageField({ value, onChange }: ProductImageField
       <HintInput
         value={value}
         onChange={(event) => onChange?.(event.target.value)}
-        placeholder="/images/uploads/ten-anh.png hoặc URL ảnh"
-        tooltip="Đường dẫn ảnh sau khi upload, hoặc dán URL ảnh có sẵn"
+        placeholder="https://res.cloudinary.com/... hoặc URL ảnh"
+        tooltip="Ảnh sẽ được upload lên Cloudinary; bạn cũng có thể dán URL ảnh có sẵn"
       />
       {value ? (
         <Button size="small" onClick={() => onChange?.('')}>

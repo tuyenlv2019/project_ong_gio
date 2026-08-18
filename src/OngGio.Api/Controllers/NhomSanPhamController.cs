@@ -1,7 +1,13 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OngGio.Api;
 using OngGio.Domain.Entities;
 using OngGio.Infrastructure.Persistence;
+using OngGio.Infrastructure.Services;
 
 namespace OngGio.Api.Controllers;
 
@@ -179,8 +185,13 @@ internal static class ThamSoFormValidator
 public class NhomSanPhamController : ControllerBase
 {
     private readonly OngGioDbContext _db;
+    private readonly CloudinaryImageService _cloudinaryImageService;
 
-    public NhomSanPhamController(OngGioDbContext db) => _db = db;
+    public NhomSanPhamController(OngGioDbContext db, CloudinaryImageService cloudinaryImageService)
+    {
+        _db = db;
+        _cloudinaryImageService = cloudinaryImageService;
+    }
 
     /// <summary>
     /// Lấy danh sách nhóm sản phẩm kèm tham số cố định.
@@ -212,7 +223,7 @@ public class NhomSanPhamController : ControllerBase
     /// <returns>Đường dẫn public của ảnh vừa tải lên.</returns>
     [HttpPost("upload-image")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<IActionResult> UploadImage(IFormFile? file, CancellationToken ct)
+    public async Task<IActionResult> UploadImage([FromForm] IFormFile? file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "Chưa chọn file ảnh" });
@@ -224,18 +235,34 @@ public class NhomSanPhamController : ControllerBase
         if (file.Length > 5 * 1024 * 1024)
             return BadRequest(new { message = "Ảnh không được vượt quá 5MB" });
 
-        var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "uploads");
-        Directory.CreateDirectory(uploadDir);
-
-        var fileName = $"{Guid.NewGuid():N}{extension}";
-        var filePath = Path.Combine(uploadDir, fileName);
-
-        await using (var stream = new FileStream(filePath, FileMode.Create))
+        try
         {
-            await file.CopyToAsync(stream, ct);
+            await using var fileStream = file.OpenReadStream();
+            var path = await _cloudinaryImageService.UploadProductImageAsync(
+                fileStream,
+                file.FileName,
+                file.ContentType,
+                ct);
+            return Ok(new { path });
         }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Message });
+        }
+    }
 
-        return Ok(new { path = $"/images/uploads/{fileName}" });
+    [HttpPost("migrate-images-to-cloudinary")]
+    public async Task<IActionResult> MigrateImagesToCloudinary(CancellationToken ct)
+    {
+        if (!AuthClaims.IsAdmin(User))
+            return Forbid();
+
+        var migrated = await _cloudinaryImageService.MigrateNhomSanPhamImagesAsync(ct);
+        return Ok(new { migrated });
     }
 
     [HttpPost]
@@ -372,8 +399,19 @@ public class NhomSanPhamController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id, ct);
         if (item is null) return NotFound();
 
-        // If the product had an uploaded image, attempt to delete the file from disk
         if (!string.IsNullOrWhiteSpace(item.HinhAnhMinhHoa)
+            && item.HinhAnhMinhHoa.Contains("res.cloudinary.com", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await _cloudinaryImageService.DeleteProductImageAsync(item.HinhAnhMinhHoa, ct);
+            }
+            catch
+            {
+                // Ignore Cloudinary cleanup failures so DB deletion still succeeds.
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(item.HinhAnhMinhHoa)
             && item.HinhAnhMinhHoa.StartsWith("/images/uploads/", StringComparison.OrdinalIgnoreCase))
         {
             try

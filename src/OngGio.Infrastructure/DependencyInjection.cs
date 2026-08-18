@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICaptchaService, CaptchaService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBaoGiaService, BaoGiaService>();
+        services.AddScoped<CloudinaryImageService>();
         services.AddScoped<DashboardService>();
         services.AddScoped<IAuthService, Services.AuthService>();
         services.AddDbContext<OngGioDbContext>(options =>
@@ -42,6 +43,9 @@ public static class DependencyInjection
         await SyncDoMaVatLieuAsync(db);
         await SeedNguoiDungAsync(db);
         await SampleBaoGiaSeeder.SeedAsync(serviceProvider);
+
+        var cloudinaryImageService = scope.ServiceProvider.GetRequiredService<CloudinaryImageService>();
+        await cloudinaryImageService.MigrateNhomSanPhamImagesAsync();
     }
 
     private static async Task SeedNhomSanPhamAsync(OngGioDbContext db)
