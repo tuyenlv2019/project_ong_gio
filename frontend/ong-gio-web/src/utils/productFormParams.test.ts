@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractFormulaIdentifiers,
   findMauTenPlaceholdersMissingFromThamSo,
+  findSsxAssignmentMissing,
   findThamSoMissingFromFormula,
 } from './productFormParams';
 
@@ -43,6 +44,17 @@ describe('findThamSoMissingFromFormula', () => {
   it('cảnh báo khi công thức trống', () => {
     const msg = findThamSoMissingFromFormula([{ tenThamSo: 'W' }], '');
     expect(msg).toContain('W');
+  });
+});
+
+describe('findSsxAssignmentMissing', () => {
+  it('cho phép công thức có dòng gán Ssx', () => {
+    expect(findSsxAssignmentMissing('R = r + W\nSsx = R * H / 1000000')).toBeNull();
+  });
+
+  it('báo lỗi khi không có Ssx', () => {
+    const msg = findSsxAssignmentMissing('R = r + W\nArea = R * H / 1000000');
+    expect(msg).toContain('Ssx');
   });
 });
 

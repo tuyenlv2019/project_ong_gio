@@ -52,6 +52,21 @@ const FORMULA_KEYWORDS = new Set([
   'false',
 ]);
 
+/** Công thức hợp lệ tối thiểu phải có dòng gán kết quả vào Ssx. */
+export function hasSsxAssignment(formula: string | null | undefined): boolean {
+  const text = formula?.trim() ?? '';
+  if (!text) return false;
+
+  return /(^|\r?\n)\s*Ssx\s*=/i.test(text);
+}
+
+export function findSsxAssignmentMissing(formula: string | null | undefined): string | null {
+  const text = formula?.trim() ?? '';
+  if (!text) return null;
+  if (hasSsxAssignment(formula)) return null;
+  return 'Công thức phải có dòng gán kết quả vào Ssx, ví dụ: Ssx = ...';
+}
+
 /** Lấy danh sách định danh dùng trong công thức ∑Ssx (chữ thường). */
 export function extractFormulaIdentifiers(formula: string): Set<string> {
   const ids = new Set<string>();

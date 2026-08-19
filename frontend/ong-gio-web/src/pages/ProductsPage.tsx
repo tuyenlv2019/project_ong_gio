@@ -4,7 +4,14 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
-import { createNhomSanPham, deleteNhomSanPham, getNhomSanPhams, updateNhomSanPham } from '../api';
+import {
+  cleanupUploadedNhomSanPhamImage,
+  createNhomSanPham,
+  deleteNhomSanPham,
+  getNhomSanPhams,
+  updateNhomSanPham,
+  uploadNhomSanPhamImage,
+} from '../api';
 import { authService } from '../authService';
 import FormulaDisplay from '../components/FormulaDisplay';
 import HintInput from '../components/HintInput';
@@ -14,6 +21,7 @@ import { useOpenCreateFromNavigation } from '../hooks/useOpenCreateFromNavigatio
 import {
   findDuplicateThamSo,
   findMauTenPlaceholdersMissingFromThamSo,
+  findSsxAssignmentMissing,
   findThamSoMissingFromFormula,
   sortOrderedThamSoCoDinhs,
 } from '../utils/productFormParams';
@@ -45,12 +53,25 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NhomSanPham | null>(null);
+  const [originalImagePath, setOriginalImagePath] = useState<string | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [formulaCopyKey, setFormulaCopyKey] = useState(0);
   const congThucDienTichWatch = Form.useWatch('congThucDienTich', form);
 
   const reload = () => {
     void getNhomSanPhams().then(setData);
+  };
+
+  const clearPendingImage = () => {
+    setPendingImageFile(null);
+    setPendingImagePreview((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
   };
 
   useEffect(() => {
@@ -94,7 +115,9 @@ export default function ProductsPage() {
   };
 
   const openModal = (item?: NhomSanPham) => {
+    clearPendingImage();
     setEditing(item ?? null);
+    setOriginalImagePath(item?.hinhAnhMinhHoa?.trim() || null);
     const defaultThamSo = item?.thamSoCoDinhs?.map((t) => ({ tenThamSo: t.tenThamSo })) ?? [
       { tenThamSo: 'W' },
       { tenThamSo: 'H' },
@@ -113,6 +136,12 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
+  const closeModal = () => {
+    clearPendingImage();
+    setOriginalImagePath(null);
+    setOpen(false);
+  };
+
   const fillSuggestedMauTen = () => {
     const thamSo = (form.getFieldValue('thamSo') as { tenThamSo?: string }[] | undefined) ?? [];
     const suggested = suggestMauTenSanPham(thamSo.map((t) => String(t.tenThamSo ?? '')));
@@ -128,14 +157,20 @@ export default function ProductsPage() {
     mauTenSanPham?: string;
     thamSo?: { tenThamSo?: string }[];
   }) => {
-    const payload = {
-      ...values,
-      thamSo: values.thamSo?.map((item) => ({
-        tenThamSo: String(item.tenThamSo ?? '').trim(),
-      })),
-    };
-
+    let uploadedImagePath: string | undefined;
     try {
+      uploadedImagePath = pendingImageFile ? await uploadNhomSanPhamImage(pendingImageFile) : undefined;
+      const nextImagePath =
+        uploadedImagePath ?? (String(values.hinhAnhMinhHoa ?? '').trim() || undefined);
+
+      const payload = {
+        ...values,
+        hinhAnhMinhHoa: nextImagePath,
+        thamSo: values.thamSo?.map((item) => ({
+          tenThamSo: String(item.tenThamSo ?? '').trim(),
+        })),
+      };
+
       if (editing) {
         await updateNhomSanPham(editing.id, payload);
         message.success('Đã cập nhật sản phẩm');
@@ -143,9 +178,25 @@ export default function ProductsPage() {
         await createNhomSanPham(payload);
         message.success('Đã thêm sản phẩm');
       }
-      setOpen(false);
+
+      if (originalImagePath && originalImagePath !== nextImagePath && originalImagePath.includes('res.cloudinary.com')) {
+        try {
+          await cleanupUploadedNhomSanPhamImage(originalImagePath);
+        } catch {
+          // Ignore cleanup failures so the save result remains successful.
+        }
+      }
+
+      closeModal();
       reload();
     } catch (err: unknown) {
+      if (uploadedImagePath) {
+        try {
+          await cleanupUploadedNhomSanPhamImage(uploadedImagePath);
+        } catch {
+          // Ignore cleanup failures so the original save error is still shown.
+        }
+      }
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       message.error(msg || 'Lưu thất bại');
     }
@@ -153,6 +204,11 @@ export default function ProductsPage() {
 
   const onSave = async () => {
     const values = await form.validateFields();
+    const ssxMissingMsg = findSsxAssignmentMissing(values.congThucDienTich);
+    if (ssxMissingMsg) {
+      message.warning(ssxMissingMsg);
+      return;
+    }
     const duplicateMsg = findDuplicateThamSo(values.thamSo ?? []);
     if (duplicateMsg) {
       message.warning(duplicateMsg);
@@ -309,7 +365,7 @@ export default function ProductsPage() {
         }
       `}</style>
 
-      <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={() => setOpen(false)} width={720}>
+      <Modal title={editing ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} open={open} onOk={onSave} onCancel={closeModal} width={720}>
         <Form form={form} layout="vertical">
           <Form.Item name="tenNhom" label="Tên nhóm" rules={[{ required: true }]}>
             <HintInput placeholder="Co 90 độ, Ống thẳng..." />
@@ -319,7 +375,21 @@ export default function ProductsPage() {
             label="Ảnh minh họa"
             extra="Tải ảnh từ máy (JPG, PNG, GIF, WEBP — tối đa 5MB) hoặc nhập URL nếu ảnh đã có sẵn."
           >
-            <ProductImageField />
+            <ProductImageField
+              previewUrl={pendingImagePreview ?? undefined}
+              onRemoveCurrentImage={async (imageUrl) => {
+                await cleanupUploadedNhomSanPhamImage(imageUrl);
+              }}
+              onFileChange={(file) => {
+                setPendingImageFile(file);
+                setPendingImagePreview((current) => {
+                  if (current) {
+                    URL.revokeObjectURL(current);
+                  }
+                  return file ? URL.createObjectURL(file) : null;
+                });
+              }}
+            />
           </Form.Item>
           <Form.Item
             label="Công thức tính diện tích ∑Ssx (m²)"

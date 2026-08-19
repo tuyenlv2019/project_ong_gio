@@ -1,12 +1,14 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OngGio.Infrastructure.Persistence;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace OngGio.Infrastructure.Services;
 
@@ -38,16 +40,8 @@ public sealed class CloudinaryImageService
     {
         var options = GetOptionsOrThrow();
         var folderName = NormalizeFolder(options.Folder);
-        var timestamp = GetVietnamTimestamp();
-        var publicId = BuildPublicId(originalFileName, timestamp);
-        var signature = CreateSignature(
-            new Dictionary<string, string>
-            {
-                ["folder"] = folderName,
-                ["public_id"] = publicId,
-                ["timestamp"] = timestamp,
-            },
-            options.ApiSecret);
+        var fileTimestamp = GetVietnamTimestamp();
+        var publicId = BuildPublicId(folderName, originalFileName, fileTimestamp);
 
         using var form = new MultipartFormDataContent();
         using var streamContent = new StreamContent(fileStream);
@@ -55,21 +49,23 @@ public sealed class CloudinaryImageService
             string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
 
         form.Add(streamContent, "file", Path.GetFileName(originalFileName));
-        form.Add(new StringContent(options.ApiKey), "api_key");
-        form.Add(new StringContent(timestamp), "timestamp");
-        form.Add(new StringContent(signature), "signature");
-        form.Add(new StringContent(folderName), "folder");
         form.Add(new StringContent(publicId), "public_id");
         form.Add(new StringContent("true"), "overwrite");
 
         var uploadUrl = $"https://api.cloudinary.com/v1_1/{options.CloudName.Trim()}/image/upload";
-        var response = await Http.PostAsync(uploadUrl, form, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, uploadUrl)
+        {
+            Content = form
+        };
+        ApplyBasicAuth(request, options.ApiKey, options.ApiSecret);
+
+        var response = await Http.SendAsync(request, ct);
         var responseText = await response.Content.ReadAsStringAsync(ct);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorMessage = TryReadCloudinaryError(responseText);
-            throw new InvalidOperationException(errorMessage ?? "Tải ảnh lên Cloudinary thất bại");
+            throw new InvalidOperationException(NormalizeCloudinaryError(errorMessage, "upload"));
         }
 
         var uploadResult = JsonSerializer.Deserialize<CloudinaryUploadResponse>(responseText);
@@ -89,30 +85,40 @@ public sealed class CloudinaryImageService
 
         if (!TryExtractPublicIdFromCloudinaryUrl(imageUrlOrPath.Trim(), out var publicId))
             return;
+        var cloudName = options.CloudName.Trim();
+        var apiKey = options.ApiKey.Trim();
+        var apiSecret = options.ApiSecret.Trim();
+        var timestamp = GetCloudinaryTimestamp();
 
-        var timestamp = GetVietnamTimestamp();
         var signature = CreateSignature(
             new Dictionary<string, string>
             {
                 ["public_id"] = publicId,
-                ["timestamp"] = timestamp,
+                ["timestamp"] = timestamp
             },
-            options.ApiSecret);
+            apiSecret);
 
-        using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(options.ApiKey), "api_key");
-        form.Add(new StringContent(timestamp), "timestamp");
-        form.Add(new StringContent(signature), "signature");
-        form.Add(new StringContent(publicId), "public_id");
+        var deleteUrl =
+            $"https://api.cloudinary.com/v1_1/{cloudName}/image/destroy";
 
-        var deleteUrl = $"https://api.cloudinary.com/v1_1/{options.CloudName.Trim()}/image/destroy";
+        using var form = new FormUrlEncodedContent(
+            new Dictionary<string, string>
+            {
+                ["api_key"] = apiKey,
+                ["timestamp"] = timestamp,
+                ["signature"] = signature,
+                ["public_id"] = publicId
+            });
+
         var response = await Http.PostAsync(deleteUrl, form, ct);
-        var responseText = await response.Content.ReadAsStringAsync(ct);
+
+        var responseText =
+            await response.Content.ReadAsStringAsync(ct);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorMessage = TryReadCloudinaryError(responseText);
-            throw new InvalidOperationException(errorMessage ?? "Xóa ảnh trên Cloudinary thất bại");
+            throw new InvalidOperationException(NormalizeCloudinaryError(errorMessage, "delete"));
         }
     }
 
@@ -207,6 +213,13 @@ public sealed class CloudinaryImageService
     private CloudinaryOptions? GetOptionsOrNull()
     {
         var options = _configuration.GetSection("Cloudinary").Get<CloudinaryOptions>() ?? new CloudinaryOptions();
+        options = new CloudinaryOptions
+        {
+            CloudName = options.CloudName?.Trim() ?? string.Empty,
+            ApiKey = options.ApiKey?.Trim() ?? string.Empty,
+            ApiSecret = options.ApiSecret?.Trim() ?? string.Empty,
+            Folder = options.Folder?.Trim() ?? "ong-gio",
+        };
         if (string.IsNullOrWhiteSpace(options.CloudName)
             || string.IsNullOrWhiteSpace(options.ApiKey)
             || string.IsNullOrWhiteSpace(options.ApiSecret))
@@ -241,11 +254,35 @@ public sealed class CloudinaryImageService
         return vietNamTime.ToString("yyyyMMdd_HHmmss");
     }
 
-    private static string BuildPublicId(string originalFileName, string timestamp)
+    private static string BuildPublicId(string folderName, string originalFileName, string timestamp)
     {
         var stem = Path.GetFileNameWithoutExtension(originalFileName);
         stem = SanitizeFileNameStem(stem);
-        return $"{stem}_{timestamp}";
+        return $"{folderName}/{stem}_{timestamp}";
+    }
+
+    private static string GetCloudinaryTimestamp()
+    {
+        return DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+    }
+
+    private static string CreateSignature(IReadOnlyDictionary<string, string> parameters, string apiSecret)
+    {
+        var payload = string.Join("&",
+            parameters
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+                .Select(kv => $"{kv.Key}={kv.Value}"));
+
+        var bytes = Encoding.UTF8.GetBytes(payload + apiSecret);
+        var hash = SHA1.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static void ApplyBasicAuth(HttpRequestMessage request, string apiKey, string apiSecret)
+    {
+        var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{apiKey}:{apiSecret}"));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
     }
 
     private static string SanitizeFileNameStem(string value)
@@ -272,19 +309,6 @@ public sealed class CloudinaryImageService
         return string.IsNullOrWhiteSpace(sanitized) ? "image" : sanitized;
     }
 
-    private static string CreateSignature(IReadOnlyDictionary<string, string> parameters, string apiSecret)
-    {
-        var payload = string.Join("&",
-            parameters
-                .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
-                .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-                .Select(kv => $"{kv.Key}={kv.Value}"));
-
-        var bytes = Encoding.UTF8.GetBytes(payload + apiSecret);
-        var hash = SHA1.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
-
     private static string? TryReadCloudinaryError(string responseText)
     {
         try
@@ -303,6 +327,23 @@ public sealed class CloudinaryImageService
         }
 
         return null;
+    }
+
+    private static string NormalizeCloudinaryError(string? errorMessage, string operation)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return operation == "delete"
+                ? "Xóa ảnh trên Cloudinary thất bại"
+                : "Tải ảnh lên Cloudinary thất bại";
+        }
+
+        if (errorMessage.Contains("Unknown API key", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Cloudinary báo Unknown API key. Hãy kiểm tra lại Cloudinary__CloudName, Cloudinary__ApiKey và Cloudinary__ApiSecret trên Render, vì 3 giá trị này phải cùng một tài khoản Cloudinary.";
+        }
+
+        return errorMessage;
     }
 
     private string? ResolveWebRootPath()

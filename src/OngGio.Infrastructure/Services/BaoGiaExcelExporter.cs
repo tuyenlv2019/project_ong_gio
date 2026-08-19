@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using System.Net.Http;
 using OngGio.Domain.Entities;
 
 namespace OngGio.Infrastructure.Services;
@@ -188,6 +189,8 @@ internal static class BaoGiaExcelExporter
         sheet.SheetView.FreezeRows(4);
     }
 
+    private static readonly HttpClient _http = new HttpClient();
+
     private static void TryAddProductPicture(
         IXLWorksheet sheet,
         int row,
@@ -195,17 +198,55 @@ internal static class BaoGiaExcelExporter
         string? webRootPath)
     {
         var imagePath = ResolveLocalImagePath(product.HinhAnhMinhHoa, webRootPath);
-        if (imagePath is null)
+        if (imagePath is not null)
+        {
+            try
+            {
+                // ClosedXML: phải MoveTo vào ô trước, rồi mới Scale.
+                using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                var picture = sheet.AddPicture(stream);
+                var target = sheet.Cell(row, CatalogImageColumn);
+                picture.MoveTo(target);
+
+                var originalW = picture.OriginalWidth > 0 ? picture.OriginalWidth : picture.Width;
+                var originalH = picture.OriginalHeight > 0 ? picture.OriginalHeight : picture.Height;
+                if (originalW > 0 && originalH > 0)
+                {
+                    var scale = Math.Min(
+                        (double)CatalogImageWidthPx / originalW,
+                        (double)CatalogImageHeightPx / originalH);
+                    if (scale > 0 && Math.Abs(scale - 1d) > 0.001)
+                        picture.Scale(scale);
+                }
+                else
+                {
+                    picture.Width = CatalogImageWidthPx;
+                    picture.Height = CatalogImageHeightPx;
+                }
+            }
+            catch
+            {
+                // Bỏ qua ảnh lỗi / định dạng không hỗ trợ — vẫn giữ dòng dữ liệu.
+            }
+
+            return;
+        }
+
+        // Nếu là URL (vd: Cloudinary) thì thử tải xuống và nhúng ảnh từ stream
+        var imageUrl = (product.HinhAnhMinhHoa ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(imageUrl))
+            return;
+
+        if (!imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return;
 
         try
         {
-            // ClosedXML: phải MoveTo vào ô trước, rồi mới Scale.
-            // Chain WithSize → MoveTo(offset) / gán Name dễ làm mất anchor → ảnh xếp đè A1.
-            using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var picture = sheet.AddPicture(stream);
-            var target = sheet.Cell(row, CatalogImageColumn);
-            picture.MoveTo(target);
+            var bytes = _http.GetByteArrayAsync(imageUrl).GetAwaiter().GetResult();
+            using var ms = new MemoryStream(bytes);
+            var picture = sheet.AddPicture(ms);
+            picture.MoveTo(sheet.Cell(row, CatalogImageColumn));
 
             var originalW = picture.OriginalWidth > 0 ? picture.OriginalWidth : picture.Width;
             var originalH = picture.OriginalHeight > 0 ? picture.OriginalHeight : picture.Height;
@@ -225,7 +266,7 @@ internal static class BaoGiaExcelExporter
         }
         catch
         {
-            // Bỏ qua ảnh lỗi / định dạng không hỗ trợ — vẫn giữ dòng dữ liệu.
+            // Bỏ qua tải ảnh lỗi — không ảnh vẫn xuất được file.
         }
     }
 

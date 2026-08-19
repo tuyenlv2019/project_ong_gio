@@ -41,6 +41,18 @@ internal static class ThamSoFormValidator
         }
     }
 
+    internal static void EnsureSsxAssignment(string? congThucDienTich)
+    {
+        var formula = congThucDienTich?.Trim() ?? string.Empty;
+        if (formula.Length == 0)
+            return;
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(formula, @"(^|\r?\n)\s*Ssx\s*=", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            throw new ArgumentException("Công thức phải có dòng gán kết quả vào Ssx, ví dụ: Ssx = ...");
+        }
+    }
+
     /// <summary>
     /// Mỗi tham số form phải xuất hiện trong công thức ∑Ssx — không cho lưu tham số thừa.
     /// </summary>
@@ -255,6 +267,30 @@ public class NhomSanPhamController : ControllerBase
         }
     }
 
+    [HttpPost("cleanup-image")]
+    public async Task<IActionResult> CleanupImage([FromBody] CleanupImageRequest request, CancellationToken ct)
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.ImageUrl))
+            return BadRequest(new { message = "Thiếu đường dẫn ảnh cần xóa" });
+
+        try
+        {
+            await _cloudinaryImageService.DeleteProductImageAsync(request.ImageUrl, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { message = ex.Message });
+        }
+    }
+
     [HttpPost("migrate-images-to-cloudinary")]
     public async Task<IActionResult> MigrateImagesToCloudinary(CancellationToken ct)
     {
@@ -280,6 +316,7 @@ public class NhomSanPhamController : ControllerBase
         try
         {
             ThamSoFormValidator.EnsureUnique(request.ThamSo);
+            ThamSoFormValidator.EnsureSsxAssignment(request.CongThucDienTich);
             ThamSoFormValidator.EnsureUsedInFormula(
                 request.ThamSo,
                 isAdmin ? request.CongThucDienTich : null);
@@ -295,7 +332,9 @@ public class NhomSanPhamController : ControllerBase
         var item = new NhomSanPham
         {
             TenNhom = request.TenNhom,
-            HinhAnhMinhHoa = request.HinhAnhMinhHoa,
+            HinhAnhMinhHoa = string.IsNullOrWhiteSpace(request.HinhAnhMinhHoa)
+                ? null
+                : request.HinhAnhMinhHoa.Trim(),
             CongThucDienTich = isAdmin ? request.CongThucDienTich : null,
             MauTenSanPham = string.IsNullOrWhiteSpace(request.MauTenSanPham)
                 ? null
@@ -351,6 +390,7 @@ public class NhomSanPhamController : ControllerBase
         try
         {
             ThamSoFormValidator.EnsureUnique(request.ThamSo);
+            ThamSoFormValidator.EnsureSsxAssignment(formulaForCheck);
             ThamSoFormValidator.EnsureUsedInFormula(request.ThamSo, formulaForCheck);
             ThamSoFormValidator.EnsureMauTenPlaceholdersInThamSo(
                 request.MauTenSanPham,
@@ -362,7 +402,9 @@ public class NhomSanPhamController : ControllerBase
         }
 
         item.TenNhom = request.TenNhom;
-        item.HinhAnhMinhHoa = request.HinhAnhMinhHoa;
+        item.HinhAnhMinhHoa = string.IsNullOrWhiteSpace(request.HinhAnhMinhHoa)
+            ? null
+            : request.HinhAnhMinhHoa.Trim();
         item.MauTenSanPham = string.IsNullOrWhiteSpace(request.MauTenSanPham)
             ? null
             : request.MauTenSanPham.Trim();
@@ -444,3 +486,5 @@ public record NhomSanPhamRequest(
     string? CongThucDienTich,
     string? MauTenSanPham,
     List<ThamSoRequest>? ThamSo);
+
+public record CleanupImageRequest(string ImageUrl);

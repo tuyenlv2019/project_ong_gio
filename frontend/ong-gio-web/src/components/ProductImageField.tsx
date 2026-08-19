@@ -1,35 +1,25 @@
-import { LoadingOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Space, Upload, message } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { Button, Modal, Space, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
-import { useState } from 'react';
-import { uploadNhomSanPhamImage } from '../api';
 import { resolveMasterImageUrl } from '../utils/imageUrl';
 import HintInput from './HintInput';
 
 type ProductImageFieldProps = {
   value?: string;
+  previewUrl?: string;
   onChange?: (value: string) => void;
+  onFileChange?: (file: File | null) => void;
+  onRemoveCurrentImage?: (imageUrl: string) => Promise<void>;
 };
 
-export default function ProductImageField({ value, onChange }: ProductImageFieldProps) {
-  const [uploading, setUploading] = useState(false);
-  const imageUrl = resolveMasterImageUrl(value);
-
-  const handleUpload: UploadProps['customRequest'] = async ({ file, onSuccess, onError }) => {
-    try {
-      setUploading(true);
-      const path = await uploadNhomSanPhamImage(file as File);
-      onChange?.(path);
-      onSuccess?.(path);
-      message.success('Đã tải ảnh lên');
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      message.error(msg || 'Tải ảnh thất bại');
-      onError?.(err as Error);
-    } finally {
-      setUploading(false);
-    }
-  };
+export default function ProductImageField({
+  value,
+  previewUrl,
+  onChange,
+  onFileChange,
+  onRemoveCurrentImage,
+}: ProductImageFieldProps) {
+  const imageUrl = previewUrl ?? resolveMasterImageUrl(value);
 
   const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     const isImage = file.type.startsWith('image/');
@@ -43,7 +33,9 @@ export default function ProductImageField({ value, onChange }: ProductImageField
       return Upload.LIST_IGNORE;
     }
 
-    return true;
+    onFileChange?.(file);
+    onChange?.('');
+    return false;
   };
 
   return (
@@ -52,14 +44,10 @@ export default function ProductImageField({ value, onChange }: ProductImageField
         accept="image/*"
         listType="picture-card"
         showUploadList={false}
-        customRequest={handleUpload}
         beforeUpload={beforeUpload}
-        disabled={uploading}
         className="product-image-upload"
       >
-        {uploading ? (
-          <LoadingOutlined />
-        ) : imageUrl ? (
+        {imageUrl ? (
           <img src={imageUrl} alt="Ảnh minh họa sản phẩm" className="product-image-upload-preview" />
         ) : (
           <div className="product-image-upload-placeholder">
@@ -70,12 +58,39 @@ export default function ProductImageField({ value, onChange }: ProductImageField
       </Upload>
       <HintInput
         value={value}
-        onChange={(event) => onChange?.(event.target.value)}
+        onChange={(event) => {
+          onFileChange?.(null);
+          onChange?.(event.target.value);
+        }}
         placeholder="https://res.cloudinary.com/... hoặc URL ảnh"
-        tooltip="Ảnh sẽ được upload lên Cloudinary; bạn cũng có thể dán URL ảnh có sẵn"
+        tooltip="Ảnh sẽ được upload lên Cloudinary khi bấm Lưu; bạn cũng có thể dán URL ảnh có sẵn"
       />
       {value ? (
-        <Button size="small" onClick={() => onChange?.('')}>
+        <Button
+          size="small"
+          onClick={() => {
+            const currentValue = value.trim();
+            Modal.confirm({
+              title: 'Xóa ảnh minh họa?',
+              content: 'Ảnh hiện tại sẽ bị xóa khỏi form và trên Cloudinary nếu bạn xác nhận.',
+              okText: 'Xóa',
+              cancelText: 'Hủy',
+              okButtonProps: { danger: true },
+              onOk: async () => {
+                try {
+                  if (currentValue && currentValue.includes('res.cloudinary.com')) {
+                    await onRemoveCurrentImage?.(currentValue);
+                  }
+                  onFileChange?.(null);
+                  onChange?.('');
+                } catch (err) {
+                  const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                  message.error(msg || 'Không xóa được ảnh trên Cloudinary');
+                }
+              },
+            });
+          }}
+        >
           Xóa ảnh
         </Button>
       ) : null}

@@ -104,6 +104,10 @@ export async function uploadNhomSanPhamImage(file: File): Promise<string> {
   return data.path;
 }
 
+export async function cleanupUploadedNhomSanPhamImage(imageUrl: string) {
+  await api.post('/api/nhom-san-pham/cleanup-image', { imageUrl });
+}
+
 /**
  * Lấy danh sách loại tôn.
  * @returns Danh sách loại tôn.
